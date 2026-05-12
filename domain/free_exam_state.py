@@ -10,6 +10,7 @@ class FreeExamState:
     hidden_scenario_id: str = ""
     final_close_attempted: bool = False
     final_close_wait_frames: int = 0
+    sustained_pass_frames: int = 0
     result: str = "idle"  # idle | running | pending | passed | failed
     fail_reason: str = ""
     measurement_records: List[Dict[str, Any]] = field(default_factory=list)
@@ -20,6 +21,7 @@ class FreeExamState:
         self.hidden_scenario_id = ""
         self.final_close_attempted = False
         self.final_close_wait_frames = 0
+        self.sustained_pass_frames = 0
         self.result = "idle"
         self.fail_reason = ""
         self.measurement_records.clear()

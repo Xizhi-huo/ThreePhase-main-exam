@@ -62,6 +62,11 @@ class PowerSyncController:
     _TICK_FAILURE_THRESHOLD = 5
 
     def __init__(self):
+        # 初始化按依赖层级排列；仅保留两处必要延迟绑定：
+        # blackbox_handler ↔ fault_mgr 存在真实循环，hardware_actions 需要晚建的 ui。
+        # 其他服务尽量直接引用，避免构造期回调顺序耦合。
+        # 旧教学态对象保留到 P3 清理，不参与新增考核语义。
+        # Layer 0：纯状态对象（无依赖）
         self.sim_state = SimulationState(
             gen1=GeneratorState(
                 freq=round(random.uniform(48.0, 52.0), 1),
@@ -78,8 +83,8 @@ class PowerSyncController:
         self.flow_mgr = FlowModeManager()
         self.test_flow_mode = "assessment"
         self.free_exam_state = FreeExamState()
-        self.exam_events: list[dict] = []
 
+        # Layer 0：旧教学态残留（P3 阶段统一清理，本轮不动）
         self.loop_test_state = _LoopState()
         self.pt_voltage_check_state = _StepState()
         self.pt_phase_check_state = _StepState()
@@ -87,6 +92,7 @@ class PowerSyncController:
         self.sync_test_state = _SyncState()
         self.sync_svc = _NullSyncService()
 
+        # Layer 0：UI 通信中转标志
         self._pending_accident_scene_id = None
         self._pending_ui_tab_index = None
         self._pending_pt_ratio_row_updates = {}
@@ -95,11 +101,18 @@ class PowerSyncController:
         self._tick_error_notified = False
         self._last_tick_perf = time.perf_counter()
 
+        # Layer 1：仅依赖 sim_state / phase_order_state 的服务
+        self.phase_resolver = PhaseOrderResolver(
+            sim_state=self.sim_state,
+            get_pt_phase_orders=lambda: self.pt_phase_orders,
+            get_g2_blackbox_order=lambda: self.g2_blackbox_order,
+        )
+
+        # Layer 2：blackbox_handler ↔ fault_mgr 真循环依赖
         self.blackbox_handler = BlackboxRepairHandler(
             sim_state=self.sim_state,
             flow_mgr=self.flow_mgr,
-            get_fault_mgr=lambda: self.fault_mgr,
-            append_assessment_event=self.append_assessment_event,
+            get_fault_mgr=lambda: self.fault_mgr,  # 延迟绑定：fault_mgr 在下一层才存在
             get_pt_phase_orders=lambda: self.pt_phase_orders,
             get_g1_blackbox_order=lambda: self.g1_blackbox_order,
             set_g1_blackbox_order=lambda value: setattr(self, "g1_blackbox_order", value),
@@ -115,7 +128,6 @@ class PowerSyncController:
         self.fault_mgr = FaultManager(
             sim_state=self.sim_state,
             blackbox_handler=self.blackbox_handler,
-            append_assessment_event=self.append_assessment_event,
             request_pt_ratio_row_update=self.request_pt_ratio_row_update,
             set_last_fault_detected=lambda value: setattr(self, "_last_fault_detected", value),
             get_pt_phase_orders=lambda: self.pt_phase_orders,
@@ -128,19 +140,8 @@ class PowerSyncController:
             get_pt1_sec_blackbox_order=lambda: self.pt1_sec_blackbox_order,
             set_pt1_sec_blackbox_order=lambda value: setattr(self, "pt1_sec_blackbox_order", value),
         )
-        self.phase_resolver = PhaseOrderResolver(
-            sim_state=self.sim_state,
-            get_pt_phase_orders=lambda: self.pt_phase_orders,
-            get_g2_blackbox_order=lambda: self.g2_blackbox_order,
-        )
-        self.free_exam_svc = FreeExamService(
-            sim_state=self.sim_state,
-            get_physics=lambda: self.physics,
-            get_state=lambda: self.free_exam_state,
-            set_state=lambda state: setattr(self, "free_exam_state", state),
-            get_pending_accident_scene_id=lambda: self._pending_accident_scene_id,
-            get_phase_sequence_measurement=self.get_phase_sequence_measurement,
-        )
+
+        # Layer 3：物理引擎（依赖 phase_resolver、回调）
         self.physics = PhysicsEngine(
             sim_state=self.sim_state,
             flow_mgr=self.flow_mgr,
@@ -153,14 +154,29 @@ class PowerSyncController:
             mark_fault_detected=self.mark_fault_detected,
             queue_accident_dialog=self.queue_accident_dialog,
         )
+
+        # Layer 4：依赖 physics 的考核服务
+        self.free_exam_svc = FreeExamService(
+            sim_state=self.sim_state,
+            physics=self.physics,
+            get_state=lambda: self.free_exam_state,
+            set_state=lambda state: setattr(self, "free_exam_state", state),
+            get_pending_accident_scene_id=lambda: self._pending_accident_scene_id,
+            get_phase_sequence_measurement=self.get_phase_sequence_measurement,
+        )
+
+        # Layer 5：硬件操作（ui 在最后构造，警告出口保留延迟绑定）
         self.hw = HardwareActions(
             sim_state=self.sim_state,
-            show_warning=lambda title, message: self.ui.show_warning(title, message),
+            show_warning=lambda title, message: self.ui.show_warning(title, message),  # 延迟绑定：ui 在最后构造
             is_free_exam_active=self.is_free_exam_active,
             on_free_exam_final_close_attempt=self.free_exam_svc.on_gen2_final_close_attempt,
         )
 
+        # Layer 6：UI（消费上面所有服务）
         self.ui = PowerSyncUI(self)
+
+        # Layer 7：物理时钟
         self._timer = QtCore.QTimer()
         self._timer.setInterval(33)
         self._timer.timeout.connect(self._tick)
@@ -291,13 +307,11 @@ class PowerSyncController:
         scenario_id = random.choice(fault_ids)
         self.reset_for_scenario(scenario_id)
         self._pending_accident_scene_id = None
-        self.exam_events.clear()
         self.free_exam_svc.start_free_exam(scenario_id)
         return scenario_id
 
     def reset_free_exam(self) -> None:
         self._pending_accident_scene_id = None
-        self.exam_events.clear()
         self.reset_for_scenario("")
         self.free_exam_svc.reset_free_exam()
 
@@ -344,15 +358,11 @@ class PowerSyncController:
         self._pending_pt_ratio_row_updates.clear()
         return updates
 
-    def append_assessment_event(self, event_type, **kwargs) -> None:
-        self.exam_events.append({"type": event_type, **kwargs})
-
     def mark_fault_detected(self, **payload) -> bool:
         fc = self.sim_state.fault_config
         if fc.active and not fc.repaired:
             fc.detected = True
             self._last_fault_detected = True
-            self.exam_events.append({"type": "fault_detected", **payload})
         return True
 
     def reset_pt_ratios_to_defaults(self) -> None:
@@ -395,7 +405,24 @@ class PowerSyncController:
         self.phase_order_state.reset_pt_phase_orders()
         self.phase_order_state.reset_blackbox_orders()
         self.reset_pt_ratios_to_defaults()
-        self.inject_fault(scenario_id)
+        try:
+            self.inject_fault(scenario_id)
+        except Exception:
+            traceback.print_exc()
+            # 回滚到无故障安全态，避免 UI 停在半重置状态。
+            self.phase_order_state.reset_pt_phase_orders()
+            self.phase_order_state.reset_blackbox_orders()
+            self.reset_pt_ratios_to_defaults()
+            fc = self.sim_state.fault_config
+            fc.scenario_id = ""
+            fc.active = False
+            fc.detected = False
+            fc.repaired = False
+            fc.params = {}
+            try:
+                self.inject_fault("")
+            except Exception:
+                traceback.print_exc()
         self._last_fault_detected = False
 
         if hasattr(self, "physics"):

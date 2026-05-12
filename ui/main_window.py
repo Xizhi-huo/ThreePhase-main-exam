@@ -143,12 +143,9 @@ class PowerSyncUI(WidgetBuilderMixin, QtWidgets.QMainWindow):
     @staticmethod
     def _sync_button_group(group, value) -> None:
         for button in group.buttons():
-            if button.property("value") != value:
-                continue
             button.blockSignals(True)
-            button.setChecked(True)
+            button.setChecked(button.property("value") == value)
             button.blockSignals(False)
-            break
 
     def _consume_controller_ui_requests(self) -> None:
         tab_index = self.ctrl.consume_requested_ui_tab()
