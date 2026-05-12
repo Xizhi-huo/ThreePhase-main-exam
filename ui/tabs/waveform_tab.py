@@ -306,7 +306,6 @@ class WaveformTab(QtWidgets.QWidget):
     def _init_lines(self):
         self._init_waveform_lines()
         self._init_phasor_lines()
-        self._sync_last_metrics = None
 
     def _init_waveform_lines(self):
         self.line_ga, = self.ax_a.plot([], [], color=PLOT_THEME["phase_a"], lw=2.2, label="Busbar")
@@ -673,35 +672,6 @@ class WaveformTab(QtWidgets.QWidget):
             return "接近就绪", "warning", "条件正在收敛，但相角差或压差仍需继续观察。"
         return "未就绪", "danger", "当前仍不满足同期合闸条件，应继续调整或等待自动收敛。"
 
-    def _build_trend_text(self, delta_f, delta_v, delta_theta):
-        current = {
-            "freq": abs(delta_f),
-            "volt": abs(delta_v),
-            "phase": abs(delta_theta),
-        }
-        if not self._sync_last_metrics:
-            self._sync_last_metrics = current
-            return "趋势：等待第二个采样点后开始判断收敛方向。"
-
-        parts = []
-        labels = {"freq": "Δf", "volt": "ΔV", "phase": "Δθ"}
-        for key in ("freq", "volt", "phase"):
-            prev = self._sync_last_metrics[key]
-            now = current[key]
-            if now < prev - 1e-6:
-                trend = "收敛"
-            elif now > prev + 1e-6:
-                trend = "放大"
-            else:
-                trend = "持平"
-            parts.append(f"{labels[key]} {trend}")
-        self._sync_last_metrics = current
-        return "趋势：" + " / ".join(parts)
-
-    def _normalize_diff_deg(self, value):
-        value = (value + 180.0) % 360.0 - 180.0
-        return value
-
     def _mode_text(self, mode):
         mapping = {
             "auto": "自动",
@@ -709,20 +679,6 @@ class WaveformTab(QtWidgets.QWidget):
             "stop": "停止",
         }
         return mapping.get(mode, str(mode))
-
-    def _tone_from_color(self, color, fallback="neutral"):
-        color = (color or "").lower()
-        if color in {"#16a34a", "#15803d", "green"}:
-            return "success"
-        if color in {"#dc2626", "#b91c1c", "red"}:
-            return "danger"
-        if color in {"#d97706", "#b45309", "orange"}:
-            return "warning"
-        if color in {"#0369a1", "#2563eb", "blue"}:
-            return "info"
-        if color in {"gray", "grey"}:
-            return "neutral"
-        return fallback
 
     def _set_widget_props(self, widget, **props):
         for key, value in props.items():

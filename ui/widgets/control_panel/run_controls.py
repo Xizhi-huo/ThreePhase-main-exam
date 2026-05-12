@@ -4,7 +4,7 @@ from collections import OrderedDict
 
 from PyQt5 import QtCore, QtWidgets
 
-from domain.enums import AVAILABLE_MODES, SystemMode
+from domain.enums import AVAILABLE_MODES
 from domain.node_map import NODES
 from ui.widgets.control_panel._widget_tokens import (
     apply_badge_tone,
@@ -57,10 +57,8 @@ class RunControlsPage(QtWidgets.QWidget):
         mode_layout.setSpacing(2)
         self.mode_bg = QtWidgets.QButtonGroup(self)
         for mode_value in AVAILABLE_MODES:
-            available = mode_value == SystemMode.ISOLATED_BUS
-            radio = QtWidgets.QRadioButton(mode_value if available else f"{mode_value} (待开发)")
+            radio = QtWidgets.QRadioButton(mode_value)
             radio.setProperty("value", mode_value)
-            radio.setEnabled(available)
             radio.setChecked(self.sim_state.system_mode == mode_value)
             radio.toggled.connect(lambda checked, v=mode_value: self._on_mode_changed(v, checked))
             self.mode_bg.addButton(radio)
@@ -435,23 +433,6 @@ class RunControlsPage(QtWidgets.QWidget):
             return "未选择测点"
 
         return " ↔ ".join(self._compact_node_label(node) for node in nodes)
-
-    def _format_record_nodes(self, record) -> str:
-        if record.get("kind") == "phase_sequence":
-            pt_name = record.get("pt_name") or "未选择 PT"
-            if pt_name == "未选择 PT":
-                return "相序仪：未选择 PT 测点"
-            return f"{pt_name} 二次侧 A / B / C"
-        return self._format_nodes(record.get("nodes"))
-
-    def _format_nodes(self, nodes) -> str:
-        if not nodes:
-            return "未选择测点"
-        try:
-            labels = [self._format_node_label(node) for node in nodes if node]
-            return "  ↔  ".join(labels) if labels else "未选择测点"
-        except TypeError:
-            return str(nodes)
 
     def _format_node_label(self, node: str) -> str:
         data = NODES.get(str(node))

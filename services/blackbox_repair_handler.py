@@ -191,7 +191,7 @@ class BlackboxRepairHandler:
         disable_repair_button = ratio_fault_cleared
         fault_mgr = self._get_fault_mgr()
         if ratio_fault_cleared:
-            message = "OK æ­¤å¤„æŽ¥çº¿å·²ä¿®å¤ã€‚è¯·å…³é—­å¹¶æ£€æŸ¥å…¶ä»–ä½ç½®çš„æŽ¥çº¿ã€‚"
+            message = "✓ 此处接线已修复。请关闭并检查其他位置的接线。"
             message_color = "#0369a1"
         elif (
             fault_active
