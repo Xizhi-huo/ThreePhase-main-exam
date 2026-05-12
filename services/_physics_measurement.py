@@ -123,16 +123,15 @@ class MeasurementMixin:
             self.pt3_v = a2 / sim.pt3_ratio
 
     def _handle_loop_measurement(self, sim, n1, n2, info1, info2) -> None:
-        loop_done = self._get_loop_test_state().completed
-        if (sim.gen1.running or sim.gen2.running) and not loop_done:
+        if sim.gen1.running or sim.gen2.running:
             self.meter_status = "invalid"
             self.meter_color = "red"
             self.meter_reading = "⚠ 危险：发电机运行中，通断测试须先停机，高压将损坏万用表"
-        elif sim.grounding_mode != "断开" and not loop_done:
+        elif sim.grounding_mode != "断开":
             self.meter_status = "invalid"
             self.meter_color = "red"
             self.meter_reading = "通断测试前请先断开中性点接地（防止通过中性点形成寄生回路）"
-        elif not (sim.gen1.breaker_closed and sim.gen2.breaker_closed) and not loop_done:
+        elif not (sim.gen1.breaker_closed and sim.gen2.breaker_closed):
             self.meter_status = "invalid"
             self.meter_color = "red"
             self.meter_reading = "通断测试前请先闭合 Gen1 和 Gen2 断路器（使被测回路形成完整通路）"

@@ -2,7 +2,7 @@
 
 from PyQt5 import QtCore, QtWidgets
 
-from ui.tabs._step_style import apply_button_tone, set_props, tone_from_color
+from ui.tabs._step_style import apply_button_tone, set_props
 from ui.widgets.gen_wiring_widget import GenWiringWidget
 from ui.widgets.pt_wiring_widget import PTWiringWidget
 
@@ -27,6 +27,7 @@ def show_blackbox_dialog(owner, *, api, step: int, target: str) -> None:
     initial_pri_order = None
     initial_sec_order = None
     initial_sec_polarity = None
+    initial_sec_ratio_secondary = None
 
     if target in ("G1", "G2"):
         dlg.setWindowTitle(f"发电机 {target} 机端接线检查")
@@ -67,10 +68,14 @@ def show_blackbox_dialog(owner, *, api, step: int, target: str) -> None:
             sec_polarity=blackbox_state.get("sec_polarity"),
             interactive_sec=allow_repair,
             interactive_polarity=allow_repair,
+            sec_ratio_secondary=blackbox_state.get("sec_ratio_secondary"),
+            interactive_ratio=allow_repair,
+            ratio_primary=blackbox_state.get("ratio_primary", 11000),
         )
         initial_pri_order = widget.get_pri_order()
         initial_sec_order = widget.get_sec_order()
         initial_sec_polarity = widget.get_sec_polarity()
+        initial_sec_ratio_secondary = widget.get_sec_ratio_secondary()
         layout.addWidget(widget, alignment=QtCore.Qt.AlignHCenter)
 
     else:
@@ -97,6 +102,11 @@ def show_blackbox_dialog(owner, *, api, step: int, target: str) -> None:
                 if repair_target in ("PT1", "PT3") and hasattr(widget, "get_sec_polarity")
                 else None
             )
+            new_sec_ratio_secondary = (
+                widget.get_sec_ratio_secondary()
+                if repair_target == "PT3" and hasattr(widget, "get_sec_ratio_secondary")
+                else initial_sec_ratio_secondary
+            )
             outcome = api.apply_blackbox_repair_attempt(
                 repair_target,
                 step=step,
@@ -108,9 +118,10 @@ def show_blackbox_dialog(owner, *, api, step: int, target: str) -> None:
                 new_sec_order=new_sec,
                 initial_sec_polarity=initial_sec_polarity,
                 new_sec_polarity=new_sec_polarity,
+                new_sec_ratio_secondary=new_sec_ratio_secondary,
             )
             feedback.setText("接线已保存，请关闭黑盒后继续外部测量和操作。")
-            set_props(feedback, feedbackText=True, tone=tone_from_color(outcome.message_color, "info"))
+            set_props(feedback, feedbackText=True, tone="info")
             feedback.setVisible(True)
 
         btn_save = QtWidgets.QPushButton("保存接线")

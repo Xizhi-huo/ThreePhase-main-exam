@@ -107,6 +107,8 @@ class BlackboxRepairHandler:
                 'pri_order': list(_NORMAL_ORDER),
                 'sec_order': list(pt_phase_orders.get('PT3', _NORMAL_ORDER)),
                 'sec_polarity': sec_polarity,
+                'sec_ratio_secondary': int(round(11000.0 / self._sim_state.pt3_ratio)),
+                'ratio_primary': 11000,
                 'repair_target': 'PT3' if self._flow_mgr.can_repair_in_blackbox() else None,
             }
         raise ValueError(f"Unsupported blackbox target: {target}")
@@ -123,9 +125,11 @@ class BlackboxRepairHandler:
             initial_sec_order=None,
             new_sec_order=None,
             initial_sec_polarity=None,
-            new_sec_polarity=None) -> BlackboxRepairOutcome:
+            new_sec_polarity=None,
+            new_sec_ratio_secondary: int | None = None) -> BlackboxRepairOutcome:
         component_correct = False
         touched_layers = []
+        ratio_fault_cleared = False
 
         if target == 'G1':
             if initial_order is not None and list(new_order) != list(initial_order):
@@ -224,6 +228,17 @@ class BlackboxRepairHandler:
                 list(new_sec_order) == _NORMAL_ORDER
                 and polarity_correct
             )
+            fault_mgr = self._get_fault_mgr()
+            if (new_sec_ratio_secondary is not None
+                    and new_sec_ratio_secondary > 0):
+                new_ratio = 11000.0 / float(new_sec_ratio_secondary)
+                self._sim_state.pt3_ratio = new_ratio
+                ratio_fault_cleared = fault_mgr.maybe_repair_pt_ratio_fault(
+                    'pt3_ratio',
+                    new_ratio,
+                    step=step,
+                    source='PT3_ratio_blackbox',
+                )
         else:
             raise ValueError(f"Unsupported blackbox repair target: {target}")
 
@@ -239,17 +254,21 @@ class BlackboxRepairHandler:
             return BlackboxRepairOutcome(
                 target=target,
                 component_correct=False,
-                fault_cleared=False,
+                fault_cleared=ratio_fault_cleared,
                 message="X æŽ¥çº¿ä»æœ‰é”™è¯¯ï¼Œè¯·é‡æ–°è°ƒæ•´åŽå†æäº¤ã€‚",
                 message_color="#dc2626",
+                disable_repair_button=ratio_fault_cleared,
             )
 
         fault_config = self._sim_state.fault_config
         fault_active = bool(fault_config.active and not fault_config.repaired)
-        fault_cleared = False
-        disable_repair_button = False
+        fault_cleared = ratio_fault_cleared
+        disable_repair_button = ratio_fault_cleared
         fault_mgr = self._get_fault_mgr()
-        if (
+        if ratio_fault_cleared:
+            message = "OK æ­¤å¤„æŽ¥çº¿å·²ä¿®å¤ã€‚è¯·å…³é—­å¹¶æ£€æŸ¥å…¶ä»–ä½ç½®çš„æŽ¥çº¿ã€‚"
+            message_color = "#0369a1"
+        elif (
             fault_active
             and target == 'PT3'
             and fault_config.scenario_id == 'E03'

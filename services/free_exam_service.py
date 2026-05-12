@@ -84,7 +84,7 @@ class FreeExamService:
 
         pending_accident = self._get_pending_accident_scene_id()
         if pending_accident:
-            self._fail(f"Gen2 合闸触发事故场景 {pending_accident}")
+            self._fail("未通过：考核条件未满足")
             return
 
         sim = self._sim_state
