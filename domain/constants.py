@@ -27,7 +27,3 @@ E04_PT3_RATIO_ROW = (11000, 93)
 E04_PT3_RATIO = E04_PT3_RATIO_ROW[0] / E04_PT3_RATIO_ROW[1]
 
 NEUTRAL_RESISTOR_OHMS = 10.0     # 中性点接地小电阻 (10Ω，高压机组常用)
-
-# 下垂控制系数 (本轮已停用，保留注释便于后续恢复)
-# KP_DROOP = 0.0005
-# KQ_DROOP = 0.0002

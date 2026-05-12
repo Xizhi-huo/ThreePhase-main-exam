@@ -346,8 +346,6 @@ class DrawTopologyMixin:
                 )
                 self._psm_terminal_markers[node_name] = {"ring": ring, "fill": fill}
 
-        self._build_record_tables(ax)
-
     def _sidebar_label(self, name: str):
         return self._sidebar_badges[name]
 
@@ -450,8 +448,6 @@ class DrawTopologyMixin:
 
     def _render_gen_wire_visibility(self):
         visible = self._api.sim_state.show_gen_wires
-        if (self._api.is_assessment_mode() and not self._api.is_free_exam_active() and not self._api.is_loop_test_complete()):
-            visible = False
         for art in self._g1_wire_artists + self._g2_wire_artists:
             art.set_visible(visible)
         for line in self.sw1_pack + self.sw2_pack:

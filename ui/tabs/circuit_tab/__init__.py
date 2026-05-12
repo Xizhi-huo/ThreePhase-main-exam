@@ -21,7 +21,6 @@ from ui.widgets.phase_seq_meter import PhaseSeqMeterWidget
 
 from ._draw_topology import DrawTopologyMixin
 from ._phase_wiring import PhaseWiringMixin, PhaseWiringSession, PhaseWiringStatus
-from ._record_tables import RecordTablesMixin
 
 
 class CircuitTabAPI(Protocol):
@@ -31,33 +30,13 @@ class CircuitTabAPI(Protocol):
     @property
     def pt_phase_orders(self) -> object: ...
 
-    @property
-    def loop_test_state(self) -> object: ...
-
-    @property
-    def pt_voltage_check_state(self) -> object: ...
-
-    @property
-    def pt_phase_check_state(self) -> object: ...
-
-    @property
-    def pt_exam_states(self) -> object: ...
-
-    @property
-    def sync_test_state(self) -> object: ...
-
     def get_pt_phase_sequence(self, name: str): ...
 
-    def is_assessment_mode(self) -> bool: ...
-
     def is_free_exam_active(self) -> bool: ...
-
-    def is_loop_test_complete(self) -> bool: ...
 
 
 class CircuitTab(
     PhaseWiringMixin,
-    RecordTablesMixin,
     DrawTopologyMixin,
     QtWidgets.QWidget,
 ):
@@ -120,7 +99,6 @@ class CircuitTab(
         self._render_gen_wire_visibility()
         self._render_grounding_and_pt(p)
         self._render_multimeter(p)
-        self._render_pt_record_tables(p)
 
     def redraw_canvas(self) -> None:
         self.canvas2.draw_idle()

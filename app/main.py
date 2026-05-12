@@ -5,7 +5,6 @@ import random
 import sys
 import time
 import traceback
-from dataclasses import dataclass, field
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -24,38 +23,6 @@ from services.hardware_actions import HardwareActions
 from services.phase_order_resolver import PhaseOrderResolver
 from services.physics_engine import PhysicsEngine
 from ui.main_window import PowerSyncUI
-
-
-@dataclass
-class _LoopState:
-    completed: bool = True
-    records: dict = field(default_factory=dict)
-
-
-@dataclass
-class _StepState:
-    started: bool = False
-    completed: bool = True
-    records: dict = field(default_factory=dict)
-    feedback: str = ""
-    feedback_color: str = "#444444"
-    result: object = None
-
-
-@dataclass
-class _SyncState:
-    started: bool = False
-    completed: bool = False
-    round1_done: bool = False
-    round2_done: bool = False
-
-
-class _NullSyncService:
-    def is_sync_test_complete(self) -> bool:
-        return False
-
-    def is_gen_synced(self, gen_a, gen_b) -> bool:
-        return False
 
 
 class PowerSyncController:
@@ -81,16 +48,7 @@ class PowerSyncController:
         )
         self.phase_order_state = PhaseOrderState.default()
         self.flow_mgr = FlowModeManager()
-        self.test_flow_mode = "assessment"
         self.free_exam_state = FreeExamState()
-
-        # Layer 0：旧教学态残留（P3 阶段统一清理，本轮不动）
-        self.loop_test_state = _LoopState()
-        self.pt_voltage_check_state = _StepState()
-        self.pt_phase_check_state = _StepState()
-        self.pt_exam_states = {1: _StepState(), 2: _StepState()}
-        self.sync_test_state = _SyncState()
-        self.sync_svc = _NullSyncService()
 
         # Layer 0：UI 通信中转标志
         self._pending_accident_scene_id = None
@@ -146,11 +104,7 @@ class PowerSyncController:
             sim_state=self.sim_state,
             flow_mgr=self.flow_mgr,
             phase_resolver=self.phase_resolver,
-            sync_svc=self.sync_svc,
             get_pt_phase_orders=lambda: self.pt_phase_orders,
-            get_loop_test_state=lambda: self.loop_test_state,
-            get_pt_voltage_check_state=lambda: self.pt_voltage_check_state,
-            is_sync_test_active=lambda: False,
             mark_fault_detected=self.mark_fault_detected,
             queue_accident_dialog=self.queue_accident_dialog,
         )
@@ -218,9 +172,6 @@ class PowerSyncController:
     def pt1_sec_blackbox_order(self, value):
         self.phase_order_state.pt1_sec_blackbox_order[:] = list(value)
 
-    def is_assessment_mode(self) -> bool:
-        return True
-
     def is_free_exam_active(self) -> bool:
         return bool(self.free_exam_state.active)
 
@@ -229,12 +180,6 @@ class PowerSyncController:
 
     def can_repair_in_blackbox(self) -> bool:
         return self.flow_mgr.can_repair_in_blackbox()
-
-    def is_loop_test_complete(self) -> bool:
-        return True
-
-    def is_sync_test_active(self) -> bool:
-        return False
 
     def get_pt_phase_sequence(self, pt_name: str):
         return self.phase_resolver.get_pt_phase_sequence(pt_name)
@@ -395,12 +340,6 @@ class PowerSyncController:
         sim.probe2_node = None
         sim.loop_test_mode = False
         sim.fault_reverse_bc = False
-
-        self.loop_test_state = _LoopState()
-        self.pt_voltage_check_state = _StepState()
-        self.pt_phase_check_state = _StepState()
-        self.pt_exam_states = {1: _StepState(), 2: _StepState()}
-        self.sync_test_state = _SyncState()
 
         self.phase_order_state.reset_pt_phase_orders()
         self.phase_order_state.reset_blackbox_orders()

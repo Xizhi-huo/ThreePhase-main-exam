@@ -51,23 +51,7 @@ class ParamControlsPage(QtWidgets.QWidget):
         self.gov_gain_slider.valueChanged.connect(self._on_gov_gain_changed)
         param_layout.addRow("调速增益(Gov):", slider_row(self.gov_gain_slider, self.gov_gain_label))
 
-        self.sync_gain_slider = make_slider(50, 800, int(self.sim_state.sync_gain * 100))
-        self.sync_gain_label = QtWidgets.QLabel(f"{self.sim_state.sync_gain:.1f}")
-        self.sync_gain_slider.valueChanged.connect(self._on_sync_gain_changed)
-        param_layout.addRow("同步增益(Sync):", slider_row(self.sync_gain_slider, self.sync_gain_label))
-
-        self.first_start_slider = make_slider(0, 30, self.sim_state.first_start_time)
-        self.first_start_label = QtWidgets.QLabel(f"{self.sim_state.first_start_time}s")
-        self.first_start_slider.valueChanged.connect(self._on_first_start_changed)
-        param_layout.addRow("死母线投入延时:", slider_row(self.first_start_slider, self.first_start_label))
-
         layout.addWidget(param_group)
-
-        # self.droop_cb = QtWidgets.QCheckBox("启用 P-f / Q-V 下垂控制 (自适应平衡)")
-        # self.droop_cb.setChecked(self.sim_state.droop_enabled)
-        # apply_toggle_tone(self.droop_cb, "warning")
-        # self.droop_cb.toggled.connect(lambda value: setattr(self.sim_state, "droop_enabled", value))
-        # layout.addWidget(self.droop_cb)
 
         self.rotate_phasor_cb = QtWidgets.QCheckBox("相量图：绝对参考系 (电网旋转)")
         self.rotate_phasor_cb.setChecked(self.sim_state.rotate_phasor)
@@ -99,12 +83,3 @@ class ParamControlsPage(QtWidgets.QWidget):
         result = value / 100.0
         self.sim_state.gov_gain = result
         self.gov_gain_label.setText(f"{result:.2f}")
-
-    def _on_sync_gain_changed(self, value):
-        result = value / 100.0
-        self.sim_state.sync_gain = result
-        self.sync_gain_label.setText(f"{result:.1f}")
-
-    def _on_first_start_changed(self, value):
-        self.sim_state.first_start_time = value
-        self.first_start_label.setText(f"{value}s")

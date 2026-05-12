@@ -36,35 +36,12 @@ class FaultManager:
         self._get_pt1_sec_blackbox_order = get_pt1_sec_blackbox_order
         self._set_pt1_sec_blackbox_order = set_pt1_sec_blackbox_order
 
-    def has_unrepaired_wiring_fault(self) -> bool:
-        relevant_orders = self._get_repairable_wiring_orders()
-        if not relevant_orders:
-            return False
-        normal_order = ['A', 'B', 'C']
-        return any(order != normal_order for order in relevant_orders)
-
     def all_repairable_wiring_targets_normal(self) -> bool:
         relevant_orders = self._get_repairable_wiring_orders()
         if not relevant_orders:
             return False
         normal_order = ['A', 'B', 'C']
         return all(order == normal_order for order in relevant_orders)
-
-    def fault_has_repairable_wiring_targets(self) -> bool:
-        fc = self._sim_state.fault_config
-        if not fc.active:
-            return False
-        return any(
-            fc.params.get(key) is not None
-            for key in (
-                'g1_blackbox_order',
-                'pt1_pri_blackbox_order',
-                'p1_pri_blackbox_order',
-                'pt1_sec_blackbox_order',
-                'pt2_sec_blackbox_order',
-                'g2_blackbox_order',
-            )
-        )
 
     def _get_repairable_wiring_orders(self) -> List[list]:
         fc = self._sim_state.fault_config
@@ -74,18 +51,16 @@ class FaultManager:
         relevant_orders = []
         if fc.params.get('g1_blackbox_order') is not None:
             relevant_orders.append(self._get_g1_blackbox_order())
-        if (fc.params.get('pt1_pri_blackbox_order') is not None
-                or fc.params.get('p1_pri_blackbox_order') is not None):
+        if fc.params.get('pt1_pri_blackbox_order') is not None:
             relevant_orders.append(self._get_pt1_pri_blackbox_order())
-        if (fc.params.get('pt1_sec_blackbox_order') is not None
-                or fc.params.get('pt2_sec_blackbox_order') is not None):
+        if fc.params.get('pt1_sec_blackbox_order') is not None:
             relevant_orders.append(self._get_pt1_sec_blackbox_order())
         if fc.params.get('g2_blackbox_order') is not None:
             relevant_orders.append(self._get_g2_blackbox_order())
         return relevant_orders
 
     def inject_fault(self, scenario_id: str) -> None:
-        """æ³¨å…¥æ•…éšœåœºæ™¯ï¼ˆç”±ç®¡ç†å‘˜åœ¨è®­ç»ƒå‰è®¾ç½®ï¼‰ã€‚scenario_id='' æ¸…é™¤æ•…éšœã€‚"""
+        """注入故障场景（由管理员在训练前设置）。scenario_id='' 清除故障。"""
         fc = self._sim_state.fault_config
         fc.scenario_id = scenario_id
         fc.active = bool(scenario_id)
@@ -119,16 +94,10 @@ class FaultManager:
             fc.params.get('g2_blackbox_order', self._get_g2_blackbox_order())
         ))
         self._set_pt1_pri_blackbox_order(list(
-            fc.params.get(
-                'pt1_pri_blackbox_order',
-                fc.params.get('p1_pri_blackbox_order', self._get_pt1_pri_blackbox_order()),
-            )
+            fc.params.get('pt1_pri_blackbox_order', self._get_pt1_pri_blackbox_order())
         ))
         self._set_pt1_sec_blackbox_order(list(
-            fc.params.get(
-                'pt1_sec_blackbox_order',
-                fc.params.get('pt2_sec_blackbox_order', self._get_pt1_sec_blackbox_order()),
-            )
+            fc.params.get('pt1_sec_blackbox_order', self._get_pt1_sec_blackbox_order())
         ))
 
         pt1_order = fc.params.get('pt1_phase_order')
@@ -152,14 +121,12 @@ class FaultManager:
                     'g1_blackbox_order',
                     'pt1_phase_order',
                     'pt1_pri_blackbox_order',
-                    'p1_pri_blackbox_order',
                     'pt1_sec_blackbox_order',
-                    'pt2_sec_blackbox_order',
                 )):
             self._blackbox_handler.sync_pt1_blackbox_to_phase_orders()
 
     def repair_fault(self, step: int = 4, source: str = 'repair_fault') -> None:
-        """å­¦å‘˜å®Œæˆè™šæ‹Ÿä¿®å¤åŽè°ƒç”¨ï¼Œæ¶ˆé™¤æ•…éšœæ•ˆæžœå¹¶é‡ç½®æ£€æµ‹æ ‡å¿—ã€‚"""
+        """学员完成虚拟修复后调用，消除故障效果并重置检测标志。"""
         fc = self._sim_state.fault_config
         sid = fc.scenario_id
         fc.repaired = True
@@ -189,7 +156,7 @@ class FaultManager:
         step: int = 2,
         source: str = 'pt_ratio_panel',
     ) -> bool:
-        """E04 åœ¨ PT3 å˜æ¯”æ¢å¤åˆ°é¢å®šå€¼åŽæ‰æ¸…é™¤æ•…éšœã€‚"""
+        """E04 在 PT3 变比恢复到额定值后才清除故障。"""
         fc = self._sim_state.fault_config
         if not (
             ratio_attr == 'pt3_ratio'

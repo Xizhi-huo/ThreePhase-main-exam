@@ -180,7 +180,7 @@ class BlackboxRepairHandler:
                 target=target,
                 component_correct=False,
                 fault_cleared=ratio_fault_cleared,
-                message="X æŽ¥çº¿ä»æœ‰é”™è¯¯ï¼Œè¯·é‡æ–°è°ƒæ•´åŽå†æäº¤ã€‚",
+                message="× 接线仍有错误，请重新调整后再提交。",
                 message_color="#dc2626",
                 disable_repair_button=ratio_fault_cleared,
             )
@@ -201,7 +201,7 @@ class BlackboxRepairHandler:
             fault_mgr.repair_fault(step=step, source='PT3_polarity_blackbox')
             fault_cleared = True
             disable_repair_button = True
-            message = "OK PT3 A ç›¸æžæ€§å·²æ¢å¤ï¼Œæ•…éšœå·²æ¸…é™¤ã€‚è¯·å…³é—­é»‘ç›’åŽé‡æ–°æµ‹é‡ã€‚"
+            message = "✓ PT3 A 相极性已恢复，故障已清除。请关闭黑盒后重新测量。"
             message_color = "#15803d"
         elif (
             fault_active
@@ -211,10 +211,10 @@ class BlackboxRepairHandler:
             fault_mgr.repair_fault(step=step, source=f'{target}_blackbox')
             fault_cleared = True
             disable_repair_button = True
-            message = "OK å…¨éƒ¨æŽ¥çº¿å‡å·²ä¿®å¤ï¼Œæ•…éšœå·²å®Œå…¨æ¸…é™¤ã€‚"
+            message = "✓ 全部接线均已修复，故障已完全清除。"
             message_color = "#15803d"
         else:
-            message = "OK æ­¤å¤„æŽ¥çº¿å·²ä¿®å¤ã€‚è¯·å…³é—­å¹¶æ£€æŸ¥å…¶ä»–ä½ç½®çš„æŽ¥çº¿ã€‚"
+            message = "✓ 此处接线已修复。请关闭并检查其他位置的接线。"
             message_color = "#0369a1"
 
         return BlackboxRepairOutcome(
@@ -241,10 +241,10 @@ class BlackboxRepairHandler:
         return [primary_actual[labels.index(sec_label)] for sec_label in sec_order]
 
     def sync_pt1_blackbox_to_phase_orders(self) -> None:
-        """æ´¾ç”ŸåŒæ­¥: PT2 â† g1_blackbox_orderï¼›PT1 â† PT1 é»‘ç›’å‡€ç›¸åºã€‚"""
+        """派生同步：PT2 ← g1_blackbox_order；PT1 ← PT1 黑盒净相序。"""
         self._apply_pt1_blackbox_to_pt_phases(self._compute_pt1_net_order())
 
     def sync_g2_blackbox_to_phase_orders(self) -> None:
-        """æ´¾ç”ŸåŒæ­¥: PT3 â† g2_blackbox_orderã€‚"""
+        """派生同步：PT3 ← g2_blackbox_order。"""
         self._apply_g2_blackbox_to_pt3()
 

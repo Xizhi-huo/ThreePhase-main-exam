@@ -27,61 +27,18 @@ from services._physics_measurement import MeasurementMixin
 class PhysicsEngine(WaveformMixin, ArbitrationMixin, ProtectionMixin, MeasurementMixin):
     def __init__(
         self,
-        *legacy_source,
-        sim_state=None,
-        flow_mgr=None,
-        phase_resolver=None,
-        sync_svc=None,
-        get_pt_phase_orders=None,
-        get_loop_test_state=None,
-        get_pt_voltage_check_state=None,
-        is_sync_test_active=None,
-        mark_fault_detected=None,
-        queue_accident_dialog=None,
+        *,
+        sim_state,
+        flow_mgr,
+        phase_resolver,
+        get_pt_phase_orders,
+        mark_fault_detected,
+        queue_accident_dialog,
     ):
-        if legacy_source:
-            if len(legacy_source) != 1:
-                raise TypeError("PhysicsEngine accepts at most one legacy positional source")
-            source = legacy_source[0]
-            sim_state = sim_state or source.sim_state
-            flow_mgr = flow_mgr or source.flow_mgr
-            phase_resolver = phase_resolver or source.phase_resolver
-            sync_svc = sync_svc or source.sync_svc
-            get_pt_phase_orders = get_pt_phase_orders or (lambda: source.pt_phase_orders)
-            get_loop_test_state = get_loop_test_state or (lambda: source.loop_test_state)
-            get_pt_voltage_check_state = get_pt_voltage_check_state or (
-                lambda: getattr(source, 'pt_voltage_check_state', None)
-            )
-            is_sync_test_active = is_sync_test_active or source.is_sync_test_active
-            mark_fault_detected = mark_fault_detected or source.assessment_coord.mark_fault_detected
-            queue_accident_dialog = queue_accident_dialog or source.queue_accident_dialog
-
-        missing = [
-            name for name, value in (
-                ('sim_state', sim_state),
-                ('flow_mgr', flow_mgr),
-                ('phase_resolver', phase_resolver),
-                ('sync_svc', sync_svc),
-                ('get_pt_phase_orders', get_pt_phase_orders),
-                ('get_loop_test_state', get_loop_test_state),
-                ('get_pt_voltage_check_state', get_pt_voltage_check_state),
-                ('is_sync_test_active', is_sync_test_active),
-                ('mark_fault_detected', mark_fault_detected),
-                ('queue_accident_dialog', queue_accident_dialog),
-            )
-            if value is None
-        ]
-        if missing:
-            raise TypeError(f"PhysicsEngine missing required dependencies: {', '.join(missing)}")
-
         self._sim_state = sim_state
         self._flow_mgr = flow_mgr
         self._phase_resolver = phase_resolver
-        self._sync_svc = sync_svc
         self._get_pt_phase_orders = get_pt_phase_orders
-        self._get_loop_test_state = get_loop_test_state
-        self._get_pt_voltage_check_state = get_pt_voltage_check_state
-        self._is_sync_test_active = is_sync_test_active
         self._mark_fault_detected = mark_fault_detected
         self._queue_accident_dialog = queue_accident_dialog
         self.animation_time = 0.0
@@ -93,8 +50,6 @@ class PhysicsEngine(WaveformMixin, ArbitrationMixin, ProtectionMixin, Measuremen
 
         self.flash_frames1 = 0
         self.flash_frames2 = 0
-        self.dead_bus_timer = 0.0
-        self.first_ready = None
         self.bus_reference_gen = None
 
         self.plot_data = {}
@@ -135,16 +90,7 @@ class PhysicsEngine(WaveformMixin, ArbitrationMixin, ProtectionMixin, Measuremen
         sim = self._sim_state
         is_isolated = sim.system_mode == SystemMode.ISOLATED_BUS
 
-        # 仲裁前先计算一次母线参考，供仲裁器判断当前接入关系；
-        # 仲裁后再重算一次，确保本帧后续计算使用的是最终母线状态。
-        pre_arbitration_bus_state = self._update_bus_reference(sim, is_isolated)
-        self._update_arbitration(
-            sim,
-            pre_arbitration_bus_state['g1_on_bus'],
-            pre_arbitration_bus_state['g2_on_bus'],
-            pre_arbitration_bus_state['ref_freq'],
-            pre_arbitration_bus_state['ref_amp'],
-        )
+        # 计算母线参考，确保本帧后续计算使用最新母线状态。
         bus_state = self._update_bus_reference(sim, is_isolated)
 
         prev_animation_time = self._advance_time(sim)
@@ -153,7 +99,6 @@ class PhysicsEngine(WaveformMixin, ArbitrationMixin, ProtectionMixin, Measuremen
 
         wave_state = self._compute_wave_state(sim, is_isolated, bus_state['g1_on_bus'], bus_state['g2_on_bus'], a1, a2)
         deltas = self._update_protection_state(sim, wave_state, a1, a2, bus_state['g1_on_bus'], bus_state['g2_on_bus'])
-        # self._apply_droop_control(sim)
         self._update_circulating_current(sim, a1, a2, deltas['delta1'], deltas['delta2'])
 
         shift_b = 2 * np.pi / 3 if sim.fault_reverse_bc else -2 * np.pi / 3

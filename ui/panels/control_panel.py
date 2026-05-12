@@ -131,10 +131,6 @@ class WidgetBuilderMixin:
         self.sim_speed_label = param_page.sim_speed_label
         self.gov_gain_slider = param_page.gov_gain_slider
         self.gov_gain_label = param_page.gov_gain_label
-        self.sync_gain_slider = param_page.sync_gain_slider
-        self.sync_gain_label = param_page.sync_gain_label
-        self.first_start_slider = param_page.first_start_slider
-        self.first_start_label = param_page.first_start_label
         self.rotate_phasor_cb = param_page.rotate_phasor_cb
         self.relay_lbl = param_page.relay_lbl
         self.pause_btn = param_page.pause_btn

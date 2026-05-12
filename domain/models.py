@@ -44,10 +44,7 @@ class SimulationState:
     system_mode: str = SystemMode.ISOLATED_BUS
     rotate_phasor: bool = True
     sim_speed: float = 0.3
-    # droop_enabled: bool = False
-    sync_gain: float = 1.0
     gov_gain: float = 0.75
-    first_start_time: int = 10
     multimeter_mode: bool = False
     fault_reverse_bc: bool = False
     paused: bool = False
