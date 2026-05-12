@@ -107,6 +107,7 @@ class FaultManager:
             pt_phase_orders['PT2'] = ['B', 'A', 'C']
             self._set_g1_blackbox_order(['B', 'A', 'C'])
         elif scenario_id == 'E02':
+            self._sim_state.fault_reverse_bc = True
             self._set_g2_blackbox_order(['A', 'C', 'B'])
             self._blackbox_handler.sync_g2_blackbox_to_phase_orders()
         elif scenario_id == 'E04':

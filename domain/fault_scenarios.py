@@ -57,6 +57,7 @@ SCENARIOS: dict = {
         'params': {
             'pt1_phase_order': ['B', 'A', 'C'],   # PT1 端子 A→B相, B→A相, C→C相
             'g1_loop_swap': ('A', 'B'),             # G1 回路测试相序交换对
+            'g1_blackbox_order': ['B', 'A', 'C'],   # 黑箱数据源，使学员可在 G1 黑盒还原 A/B 后清除故障
         },
         'repair_prompt': (
             '已定位故障：Gen1 机端 A/B 相接线对调。\n\n'

@@ -88,6 +88,11 @@ class FreeExamService:
             return
 
         sim = self._sim_state
+        fc = sim.fault_config
+        if fc.active and fc.scenario_id and not fc.repaired and state.final_close_attempted:
+            self._fail("未通过：考核条件未满足")
+            return
+
         physics = self._get_physics()
         gen1_on_bus = (
             sim.gen1.breaker_position == BreakerPosition.WORKING
