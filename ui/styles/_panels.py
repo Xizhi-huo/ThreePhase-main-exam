@@ -487,4 +487,52 @@ QLabel[valueChip="true"] {{
     padding: 2px 6px;
 }}
 
+QWidget[measurementPanel="true"] {{
+    background: {bg_surface_alt};
+    border: 1px solid {border};
+    border-radius: 10px;
+}}
+
+QScrollArea[measurementLogScroll="true"] {{
+    background: transparent;
+    border: none;
+}}
+
+QScrollArea[measurementLogScroll="true"] > QWidget > QWidget {{
+    background: transparent;
+}}
+
+QFrame[measurementCard="true"] {{
+    background: {bg_surface};
+    border: 1px solid {border};
+    border-radius: 8px;
+}}
+
+QLabel[measurementNo="true"] {{
+    color: {text_muted};
+    font-size: 11px;
+    font-weight: 800;
+}}
+
+QLabel[measurementType="true"] {{
+    background: {primary_soft};
+    color: {primary};
+    border: 1px solid #bfdbfe;
+    border-radius: 7px;
+    padding: 2px 7px;
+    font-size: 11px;
+    font-weight: 800;
+}}
+
+QLabel[measurementNodes="true"] {{
+    color: {text_main};
+    font-size: 12px;
+    font-weight: 800;
+}}
+
+QLabel[measurementValue="true"] {{
+    color: {text_body};
+    font-size: 12px;
+    font-weight: 700;
+}}
 """

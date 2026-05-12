@@ -139,6 +139,7 @@ class PowerSyncController:
             get_state=lambda: self.free_exam_state,
             set_state=lambda state: setattr(self, "free_exam_state", state),
             get_pending_accident_scene_id=lambda: self._pending_accident_scene_id,
+            get_phase_sequence_measurement=self.get_phase_sequence_measurement,
         )
         self.physics = PhysicsEngine(
             sim_state=self.sim_state,
@@ -154,7 +155,6 @@ class PowerSyncController:
         )
         self.hw = HardwareActions(
             sim_state=self.sim_state,
-            get_physics=lambda: self.physics,
             show_warning=lambda title, message: self.ui.show_warning(title, message),
             is_free_exam_active=self.is_free_exam_active,
             on_free_exam_final_close_attempt=self.free_exam_svc.on_gen2_final_close_attempt,
@@ -222,6 +222,66 @@ class PowerSyncController:
 
     def get_pt_phase_sequence(self, pt_name: str):
         return self.phase_resolver.get_pt_phase_sequence(pt_name)
+
+    def get_phase_sequence_measurement(self):
+        if not hasattr(self, "ui"):
+            return None
+
+        circuit_tab = getattr(self.ui, "_circuit_tab", None)
+        phase_meter = getattr(self.ui, "phase_seq_meter", None)
+        if circuit_tab is None or phase_meter is None:
+            return None
+
+        raw_status = circuit_tab.get_phase_wiring_status()
+        status = getattr(raw_status, "value", str(raw_status))
+        if status == "idle":
+            return None
+
+        pt_name = circuit_tab.get_phase_wiring_active_pt()
+        phase_session = getattr(circuit_tab, "_phase_wiring", None)
+        wired = set(getattr(phase_session, "wired", set()))
+        nodes = tuple(f"{pt_name}_{phase}" for phase in ("A", "B", "C")) if pt_name else None
+
+        if status != "ready":
+            target = pt_name or "未选择 PT"
+            return {
+                "kind": "phase_sequence",
+                "pt_name": pt_name,
+                "nodes": nodes,
+                "reading": f"{target} 相序仪接线未完成：已接 {len(wired)}/3",
+                "value": None,
+                "status": "waiting",
+                "phase_sequence": "unknown",
+            }
+
+        sequence = phase_meter.current_sequence()
+        label = self._phase_sequence_label(sequence)
+        if sequence == "unknown":
+            reading = f"{pt_name} 相序仪未得到有效结果"
+            record_status = "waiting"
+        else:
+            reading = f"{pt_name} 相序：{sequence}（{label}）"
+            record_status = "ok" if label == "正序" else "warning" if label == "不平衡/故障" else "danger"
+
+        return {
+            "kind": "phase_sequence",
+            "pt_name": pt_name,
+            "nodes": nodes,
+            "reading": reading,
+            "value": sequence,
+            "status": record_status,
+            "phase_sequence": sequence,
+        }
+
+    @staticmethod
+    def _phase_sequence_label(sequence: str) -> str:
+        if sequence in {"ABC", "BCA", "CAB"}:
+            return "正序"
+        if sequence == "FAULT":
+            return "不平衡/故障"
+        if sequence == "unknown":
+            return "未知"
+        return "反序"
 
     def get_generator_state(self, gen_id: int):
         return self.sim_state.gen1 if gen_id == 1 else self.sim_state.gen2

@@ -69,11 +69,12 @@ class WidgetBuilderMixin:
             on_reset_free_exam=self._on_reset_free_exam,
             on_record_measurement=self._on_free_exam_record_measurement,
             on_show_blackbox=self._show_free_exam_blackbox,
+            on_enable_phase_seq_meter=self._enable_free_exam_phase_seq_meter,
+            on_disable_phase_seq_meter=self._disable_free_exam_phase_seq_meter,
         )
         param_page = ParamControlsPage(
             sim_state=ctrl.sim_state,
             on_toggle_pause=ctrl.toggle_pause,
-            on_instant_sync=lambda: ctrl.hw.instant_sync(),
         )
         gen1_card = GeneratorCard(
             sim_state=ctrl.sim_state,
@@ -159,6 +160,12 @@ class WidgetBuilderMixin:
             self.show_warning("尚未开始考核", "请先点击【开始随机考核】。")
         self._update_free_exam_panel()
 
+    def _enable_free_exam_phase_seq_meter(self) -> None:
+        self.enable_phase_seq_meter()
+
+    def _disable_free_exam_phase_seq_meter(self) -> None:
+        self.disconnect_phase_seq_meter()
+
     def _show_free_exam_blackbox(self, target: str) -> None:
         if not self.ctrl.is_free_exam_active():
             self.show_warning("尚未开始考核", "请先点击【开始随机考核】。")
@@ -172,7 +179,7 @@ class WidgetBuilderMixin:
             page.refresh_free_exam_panel(getattr(self.ctrl, "free_exam_state", None))
 
     def _on_circuit_click(self, event) -> None:
-        if self._circuit_tab.get_phase_wiring_status() == PhaseWiringStatus.WIRING:
+        if self._circuit_tab.get_phase_wiring_status() != PhaseWiringStatus.IDLE:
             if self._circuit_tab.handle_phase_wiring_click(event):
                 return
 

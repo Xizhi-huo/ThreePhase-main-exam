@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import math
 from typing import Callable
 
-from domain.constants import GRID_AMP, GRID_FREQ
 from domain.enums import BreakerPosition
 
 
@@ -14,24 +12,14 @@ class HardwareActions:
         self,
         *,
         sim_state,
-        get_physics: Callable[[], object],
         show_warning: Callable[[str, str], None],
         is_free_exam_active: Callable[[], bool] | None = None,
         on_free_exam_final_close_attempt: Callable[[], bool] | None = None,
     ):
         self._sim_state = sim_state
-        self._get_physics = get_physics
         self._show_warning = show_warning
         self._is_free_exam_active = is_free_exam_active or (lambda: False)
         self._on_free_exam_final_close_attempt = on_free_exam_final_close_attempt or (lambda: True)
-
-    def instant_sync(self) -> None:
-        physics = self._get_physics()
-        target_phase_deg = math.degrees(getattr(physics, "bus_phase", 0.0)) if getattr(physics, "bus_live", False) else 0.0
-        for gen in (self._sim_state.gen1, self._sim_state.gen2):
-            gen.freq = GRID_FREQ
-            gen.amp = GRID_AMP
-            gen.phase_deg = target_phase_deg
 
     def toggle_engine(self, gen_id: int) -> None:
         gen = self._get_generator_state(gen_id)

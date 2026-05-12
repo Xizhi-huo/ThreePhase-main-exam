@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Callable
+from typing import Callable, Mapping
 
 from domain.enums import BreakerPosition
 from domain.free_exam_state import FreeExamState
@@ -17,12 +17,14 @@ class FreeExamService:
         get_state: Callable[[], FreeExamState],
         set_state: Callable[[FreeExamState], None],
         get_pending_accident_scene_id: Callable[[], str | None],
+        get_phase_sequence_measurement: Callable[[], Mapping[str, object] | None] | None = None,
     ) -> None:
         self._sim_state = sim_state
         self._get_physics = get_physics
         self._get_state = get_state
         self._set_state = set_state
         self._get_pending_accident_scene_id = get_pending_accident_scene_id
+        self._get_phase_sequence_measurement = get_phase_sequence_measurement
 
     def create_free_exam_state(self) -> FreeExamState:
         return FreeExamState()
@@ -41,14 +43,22 @@ class FreeExamService:
         state = self._get_state()
         if not state.active:
             return False
-        physics = self._get_physics()
-        record = {
-            "no": state.next_record_no,
-            "nodes": getattr(physics, "meter_nodes", None),
-            "reading": getattr(physics, "meter_reading", "--"),
-            "value": getattr(physics, "meter_voltage", None),
-            "status": getattr(physics, "meter_status", "idle"),
-        }
+        phase_record = None
+        if self._get_phase_sequence_measurement is not None:
+            phase_record = self._get_phase_sequence_measurement()
+
+        if phase_record is not None:
+            record = {"no": state.next_record_no, **phase_record}
+        else:
+            physics = self._get_physics()
+            record = {
+                "no": state.next_record_no,
+                "kind": "multimeter",
+                "nodes": getattr(physics, "meter_nodes", None),
+                "reading": getattr(physics, "meter_reading", "--"),
+                "value": getattr(physics, "meter_voltage", None),
+                "status": getattr(physics, "meter_status", "idle"),
+            }
         state.measurement_records.append(record)
         state.next_record_no += 1
         return True

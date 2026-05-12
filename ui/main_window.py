@@ -109,6 +109,10 @@ class PowerSyncUI(WidgetBuilderMixin, QtWidgets.QMainWindow):
     def rebuild_circuit_diagram(self) -> None:
         self._circuit_tab.rebuild_circuit_diagram()
 
+    def enable_phase_seq_meter(self) -> None:
+        self._circuit_tab.enable_phase_seq_meter()
+        self.tab_widget.setCurrentIndex(1)
+
     def connect_phase_seq_meter(self, pt_name: str) -> None:
         self._circuit_tab.connect_phase_seq_meter(pt_name)
         self.tab_widget.setCurrentIndex(1)

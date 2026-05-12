@@ -1,153 +1,257 @@
-# ThreePhase 三相电并网仿真教学系统
+# ThreePhase 三相电并网考核系统
 
-基于 PyQt5 的高压机组并网操作培训桌面应用。当前主流程为隔离母排模式，覆盖五步并网测试、错误场景注入、物理接线黑盒修复、考核模式评分和基础回归测试。
+这是从教学版项目拆分出来的独立考核版桌面程序，基于 PyQt5、Matplotlib 和 NumPy 实现三相发电机并母仿真、测量、故障注入、黑盒修复和最终并网判定。
 
-详细实现背景见 [context.md](context.md)，长期维护清单见 [MAINTENANCE_CHECKLIST.md](MAINTENANCE_CHECKLIST.md)。
+当前版本定位为自由操作考核平台：学员不再按固定五步流程推进，也不再查看成绩单或评分明细。系统隐藏注入随机故障，学员自行测量、记录、检查黑盒并完成修复，最后通过普通 Gen2 合闸按钮尝试并入由 Gen1 建立的母排。考核结果只由这一次最终并母是否成功决定。
+
+详细需求记录见 [EXAM_MODE_REQUIREMENTS.md](EXAM_MODE_REQUIREMENTS.md)。
 
 ## 快速开始
 
-当前验证环境：Python 3.11.9。
+建议使用项目内已有虚拟环境运行：
 
-```bash
-pip install PyQt5 matplotlib numpy pytest
-python app/main.py
+```powershell
+.\.venv\Scripts\python.exe app\main.py
 ```
 
-运行测试：
+如果需要重新安装依赖，基础依赖为：
 
-```bash
-python -m pytest
+```powershell
+pip install PyQt5 matplotlib numpy
+python app\main.py
 ```
 
-当前回归基线：30 项测试通过。
+基础编译检查：
+
+```powershell
+python -m compileall -q app domain services ui adapters
+```
+
+## 当前考核流程
+
+```text
+进入程序
+→ 点击“开始随机考核”
+→ 系统隐藏注入一个随机故障
+→ 学员自由操作、测量、记录、查线和修复
+→ 学员使用普通 Gen2 合闸按钮尝试并母
+→ 系统根据 Gen2 本次并母结果判定通过或未通过
+```
+
+当前规则：
+
+- 不显示原教学版五步步骤进度。
+- 不要求学员选择最终故障场景。
+- 不生成成绩单。
+- 不显示过程评分和评分明细。
+- 允许学员打开黑盒检查并修复。
+- 测量记录只展示学员实际记录过的数据，不预置测点清单。
+- Gen2 工作位第一次合闸尝试即视为最终提交，只允许一次。
+- 最终是否通过由 Gen2 是否成功并入母排决定。
+
+## 右侧自由操作台
+
+右侧控制台保留考核需要的操作入口：
+
+- 系统运行模式：当前只开放隔离母排模式。
+- 考核启动：开始随机考核、显示当前考核状态。
+- 自由操作台：记录当前测量、重置考核。
+- 黑盒检查：G1、G2、PT1、PT3。
+- 测量记录：折叠日志形式，默认不展开，记录后只显示实际记录内容。
+- 中性点接地：断开、小电阻接地、直接接地。
+- 万用表和发电机连线显示开关。
+- Gen1 / Gen2 机组控制卡片。
+
+已从考核版界面移除：
+
+- “仲裁器：待命”显示。
+- “闭合全局远程启动信号”开关。
+- 旧远程启动自动仲裁控制入口。
+
+## 测量记录
+
+测量记录采用“折叠入口 + 日志”的形式，避免预设表格暴露考生需要测哪些点。
+
+初始状态只显示：
+
+```text
+测量记录 0
+```
+
+当学员点击“记录当前测量”后，记录区自动展开，内容类似：
+
+```text
+#1  PT2_A - PT2_B  105.00 V
+#2  G1_A - G2_A    通路 / 蜂鸣
+```
+
+记录区特点：
+
+- 不显示正常、异常、合格、不合格等判定字样。
+- 不显示标准答案或缺失测点。
+- 不预置表格行和表头。
+- 多条记录可滚动查看。
+- 新增记录后自动定位到最新记录。
+- 普通 UI 刷新不会重置用户手动滚动位置。
+
+底层仍会保留必要判断，用于故障物理表现、保护动作、事故合闸和最终并母判定。
+
+## 最终并母判定
+
+最终动作定义为：
+
+```text
+Gen2 工作位合闸，并入由 Gen1 建立的母排。
+```
+
+通过条件收敛为：
+
+```text
+Gen1 处于工作位且断路器闭合
+Gen2 处于工作位且断路器闭合
+母排带电
+母排来源为双机并联运行
+未触发待处理事故场景
+未因保护或非同期条件导致 Gen2 合闸失败
+```
+
+实现上由 `FreeExamService` 和 `HardwareActions` 协同完成：
+
+- `HardwareActions.toggle_breaker()` 监听 Gen2 工作位第一次合闸。
+- `FreeExamService.on_gen2_final_close_attempt()` 标记最终合闸已尝试。
+- `FreeExamService.update_after_physics()` 在物理帧更新后判定通过或失败。
+- 失败后不允许再次通过重新合闸补救。
+
+## 物理与保护逻辑
+
+核心物理帧入口为 `services/physics_engine.py`。
+
+当前保留：
+
+- 三相波形生成与历史缓存。
+- 母排带电状态和母排基准计算。
+- 发电机实际输出幅值爬升。
+- 断路器合闸、分闸、保护和非同期判断。
+- 机组间环流计算。
+- PT 二次侧电压计算。
+- 万用表测量逻辑。
+- 中性点接地显示与零序相关状态。
+
+已清理：
+
+- 旧远程启动信号 `remote_start_signal`。
+- 由远程启动驱动的自动起机、自动投死母线、自动同期捕获旧仲裁逻辑。
+- 面向右侧 UI 的 `arb_msg / arb_color` 仲裁器状态输出。
+
+注意：`services/_physics_arbitration.py` 仍保留母排基准计算，不能整体删除。它现在只负责判断母排来源、母排电压频率和参考机组。
+
+## 黑盒检查与修复
+
+考核版允许学员打开黑盒并修复，因为部分故障如果不修复，最终 Gen2 并母条件无法满足。
+
+当前入口：
+
+- `G1`：Gen1 机端接线。
+- `G2`：Gen2 机端接线。
+- `PT1`：Gen1 侧 PT 接线。
+- `PT3`：Gen2 侧 PT 接线。
+
+黑盒相关代码：
+
+- `ui/dialogs/blackbox.py`
+- `ui/widgets/gen_wiring_widget.py`
+- `ui/widgets/pt_wiring_widget.py`
+- `services/blackbox_repair_handler.py`
+- `services/fault_manager.py`
+- `domain/phase_order_state.py`
+
+## 中性点接地与回路测量
+
+右侧控制台保留中性点接地方式选择：
+
+- 断开。
+- 小电阻接地。
+- 直接接地。
+
+工程逻辑上，做通断或回路类测量前应断开中性点小电阻，避免通过中性点接地支路形成寄生回路，造成不该导通的测点蜂鸣或读数异常。
+
+机组带电且小电阻接地投入时，小电阻属于接入带电系统的运行回路。三相平衡时其中性点电压和接地电流可能接近 0；不平衡、接地故障或零序电压出现时，小电阻会承受中性点电压并流过接地电流。
 
 ## 项目结构
 
 ```text
-ThreePhase/
+ThreePhase-main-exam/
 ├── app/
-│   ├── main.py                  # 应用入口、PowerSyncController
-│   └── controller_signals.py    # Controller 到 UI 的信号总线
+│   ├── main.py                  # 应用入口与 PowerSyncController
+│   └── controller_signals.py
+├── adapters/
+│   └── render_state.py          # 物理层到 UI 的渲染快照
 ├── domain/
 │   ├── models.py                # GeneratorState、SimulationState
-│   ├── test_states.py           # 五步测试状态
-│   ├── fault_scenarios.py       # E01-E14 故障场景
-│   ├── assessment.py            # 考核事件、会话、成绩数据结构
-│   └── constants.py             # 物理常量
+│   ├── free_exam_state.py       # 自由考核状态
+│   ├── fault_scenarios.py       # 随机故障场景
+│   ├── phase_order_state.py     # 黑盒接线状态
+│   ├── node_map.py              # 拓扑测点坐标
+│   ├── enums.py
+│   └── constants.py
 ├── services/
 │   ├── physics_engine.py        # 物理引擎入口
-│   ├── _physics_*.py            # 波形、仲裁、保护、测量 Mixin
-│   ├── loop_test_service.py     # 第一步回路测试
-│   ├── pt_voltage_check_service.py
-│   ├── pt_phase_check_service.py
-│   ├── pt_exam_service.py
-│   ├── sync_test_service.py
+│   ├── _physics_core.py         # 波形生成
+│   ├── _physics_arbitration.py  # 母排基准计算
+│   ├── _physics_protection.py   # 断路器、保护、环流
+│   ├── _physics_measurement.py  # 接地、PT、万用表测量
+│   ├── free_exam_service.py     # 最终考核判定
+│   ├── hardware_actions.py      # 机组启停、合分闸、位置切换
 │   ├── fault_manager.py
-│   └── scoring/                 # 考核评分规则
+│   ├── blackbox_repair_handler.py
+│   └── phase_order_resolver.py
 ├── ui/
 │   ├── main_window.py
-│   ├── test_panel.py
-│   ├── panels/
-│   ├── tabs/
-│   └── widgets/
-├── tests/
-├── README.md
-└── context.md
+│   ├── panels/control_panel.py
+│   ├── widgets/control_panel/
+│   │   ├── run_controls.py      # 右侧自由操作台
+│   │   ├── param_controls.py
+│   │   └── generator_card.py
+│   ├── tabs/waveform_tab.py
+│   ├── tabs/circuit_tab/
+│   ├── dialogs/blackbox.py
+│   └── styles/
+├── EXAM_MODE_REQUIREMENTS.md
+├── ThreePhase.spec
+└── README.md
 ```
 
-## 架构概览
+## 主要代码入口
 
-```text
-PowerSyncUI
-  ↑ render_visuals(RenderState)
-  ↓ 用户操作
-PowerSyncController
-  ├── SimulationState
-  ├── PhysicsEngine
-  ├── FaultManager
-  ├── AssessmentCoordinator
-  └── 五步测试 Service
-```
+- 应用入口：[app/main.py](app/main.py)
+- 自由考核状态：[domain/free_exam_state.py](domain/free_exam_state.py)
+- 最终合闸判定：[services/free_exam_service.py](services/free_exam_service.py)
+- 硬件操作：[services/hardware_actions.py](services/hardware_actions.py)
+- 物理引擎：[services/physics_engine.py](services/physics_engine.py)
+- 测量逻辑：[services/_physics_measurement.py](services/_physics_measurement.py)
+- 保护与断路器逻辑：[services/_physics_protection.py](services/_physics_protection.py)
+- 右侧操作台：[ui/widgets/control_panel/run_controls.py](ui/widgets/control_panel/run_controls.py)
+- 母排拓扑：[ui/tabs/circuit_tab/_draw_topology.py](ui/tabs/circuit_tab/_draw_topology.py)
 
-`SimulationState` 是运行态数据源；`PhysicsEngine` 每帧更新波形、母排仲裁、断路器保护和测量值；五步测试 Service 负责记录、校验和流程推进；UI 只负责展示和采集操作。
+## 当前实现状态
 
-## 当前状态
+已完成：
 
-- 已启用 E01-E14；E15/E16 暂时禁用。
-- 第一步回路测试已扩展为 `AA/BB/CC/AB/AC/BC` 六组记录。
-- E03 可通过 PT3 接线盒二次侧极性标识修复。
-- E04 可通过右侧控制台恢复 PT3 额定变比 `11000:193` 修复。
-- 第五步完成后会稳定双机到 `50Hz / 10500V / 0°`，并重置波形历史。
-- 中性点接地断开显示只隐藏电阻下方三条竖线的下段，保留汇合线、汇合点和电阻连接。
-- 考核模式使用 33 个计分点，成绩单由 `services/scoring/` 规则生成。
+- 独立考核版项目结构。
+- 自由操作台 UI。
+- 隐藏随机故障启动。
+- 黑盒检查与修复入口。
+- Gen2 最终并母一次性判定。
+- 测量记录从预设表格改为折叠日志。
+- 右侧无效“仲裁器”和“全局远程启动信号”入口清理。
+- 旧远程自动仲裁逻辑清理，保留母排基准计算。
+- Gen2 合闸后禁止通过切换开关柜位置绕过最终判定。
 
-## 五步测试流程
+后续可继续细化：
 
-| 步骤 | 服务 | 核心目标 |
-|------|------|----------|
-| 1. 回路导通测试 | `LoopTestService` | `AA/BB/CC` 同相导通，`AB/AC/BC` 异相隔离 |
-| 2. PT 电压检查 | `PtVoltageCheckService` | PT1/PT2/PT3 三相线电压在额定容差内 |
-| 3. PT 相序检查 | `PtPhaseCheckService` | PT1/PT3 相序显示正序、反序或异常 |
-| 4. PT 压差考核 | `PtExamService` | 比较机组侧 PT 与母排侧 PT2 的二次相电压矢量差 |
-| 5. 同期功能测试 | `SyncTestService` | Gen2 自动追踪 Gen1，满足同期条件后合闸 |
-
-第四步压差计算口径：
-
-```python
-gen_ph = gen_line / sqrt(3)
-bus_ph = bus_line / sqrt(3)
-same_phase = abs(gen_ph - bus_ph)
-cross_phase = sqrt(gen_ph**2 + bus_ph**2 + gen_ph * bus_ph)
-```
-
-E03 的 PT3 A 相极性反接会改变压差口径：同相变为 `gen_ph + bus_ph`，跨相变为 `sqrt(gen_ph**2 + bus_ph**2 - gen_ph * bus_ph)`。
-
-## 故障场景
-
-| 场景 | 状态 | 故障内容 | 主要检出点 | 修复入口 |
-|------|------|----------|------------|----------|
-| E01 | 启用 | Gen1 A/B 相接线互换 | 步骤 1、3、4；第五步事故拦截 | 第五步事故弹窗 |
-| E02 | 启用 | Gen2 B/C 相接线互换 | 步骤 1、3、4；第五步事故拦截 | G2 机端黑盒 / 事故弹窗 |
-| E03 | 启用 | PT3 A 相极性反接 | 步骤 2、3、4；未修复时第五步事故拦截 | PT3 接线盒极性标识 |
-| E04 | 启用 | PT3 实际变比 `11000:93` | 步骤 2、4 | 控制台 PT3 变比恢复 `11000:193` |
-| E05-E14 | 启用 | Gen1/PT1 接线矩阵故障 | 步骤 1、3、4 | G1/PT1 黑盒渐进式修复 |
-| E15-E16 | 禁用 | Gen2 过电压、强行非同期合闸 | 开发中 | 暂无 |
-
-黑盒修复为渐进式：保存某个接线盒后会先写回运行态；只有当前场景涉及的全部可修复目标恢复正常，才会自动清除故障。
-
-## 流程模式
-
-| 模式 | 行为 |
-|------|------|
-| `teaching` | 教学模式，允许带异常继续收集证据 |
-| `engineering` | 工程模式，要求当前步骤合格后才能推进 |
-| `assessment` | 考核模式，弱化提示，记录事件流，第四步闭环后生成成绩单 |
-
-E01/E02 的真实修复入口保留在第五步事故弹窗；E03 优先通过 PT3 接线盒修复；E04 通过变比面板修复，不走黑盒门禁。
-
-## UI 入口
-
-- 主窗口：`ui/main_window.py`
-- 右侧控制面板：`ui/panels/control_panel.py`
-- 测试模式面板：`ui/test_panel.py`
-- 母排拓扑：`ui/tabs/circuit_tab/`
-- 黑盒接线图：`ui/widgets/pt_wiring_widget.py`、`ui/widgets/gen_wiring_widget.py`
-
-## 测试覆盖
-
-当前测试集中覆盖：
-
-- 考核评分快照
-- 黑盒修复编排
-- E04 PT3 变比修复
-- 第一步六组回路记录
-- 物理引擎快照
-- 第三步相序判定
-- 第五步完成态稳定
-
-常用命令：
-
-```bash
-python -m pytest
-git -c core.whitespace=cr-at-eol diff --check
-```
+- 教师端是否需要查看隐藏故障编号。
+- 失败后是否显示详细失败原因，还是只显示未通过。
+- 测量记录是否需要导出。
+- 是否记录完整操作日志。
+- 是否加入考核超时机制。
+- 回路测量时未断开小电阻的无效/危险测量表现是否需要进一步强化。

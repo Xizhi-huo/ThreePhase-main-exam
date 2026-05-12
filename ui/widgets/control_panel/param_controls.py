@@ -17,13 +17,11 @@ class ParamControlsPage(QtWidgets.QWidget):
         *,
         sim_state,
         on_toggle_pause,
-        on_instant_sync,
         parent=None,
     ) -> None:
         super().__init__(parent)
         self.sim_state = sim_state
         self.on_toggle_pause_cb = on_toggle_pause
-        self.on_instant_sync_cb = on_instant_sync
         self._build()
 
     def _build(self):
@@ -84,10 +82,6 @@ class ParamControlsPage(QtWidgets.QWidget):
         self.relay_lbl.setMinimumHeight(40)
         layout.addWidget(self.relay_lbl)
 
-        self.instant_btn = QtWidgets.QPushButton("⚡ 紧急一键强行合闸")
-        apply_button_tone(self.instant_btn, "danger", hero=True)
-        self.instant_btn.clicked.connect(self.on_instant_sync_cb)
-        layout.addWidget(self.instant_btn)
 
         self.pause_btn = QtWidgets.QPushButton("⏸ 暂停整个物理空间")
         apply_button_tone(self.pause_btn, "warning", hero=True)

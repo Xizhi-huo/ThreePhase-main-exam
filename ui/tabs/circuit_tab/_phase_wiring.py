@@ -14,11 +14,14 @@ class PhaseWiringStatus(StrEnum):
 
 @dataclass
 class PhaseWiringSession:
+    enabled: bool = False
     active_pt: str | None = None
     wired: set[str] = field(default_factory=set)
 
 
 class PhaseWiringMixin:
+    _PHASE_SEQ_PTS = ("PT1", "PT2", "PT3")
+
     def _place_phase_seq_meter(self) -> None:
         mw, mh = self.phase_seq_meter.width(), self.phase_seq_meter.height()
         bbox = self.ax_circuit.get_position()
@@ -42,9 +45,9 @@ class PhaseWiringMixin:
         self.phase_seq_meter.raise_()
 
     def get_phase_wiring_status(self) -> PhaseWiringStatus:
-        if self._phase_wiring.active_pt is None:
+        if not self._phase_wiring.enabled:
             return PhaseWiringStatus.IDLE
-        if self._phase_wiring.wired == {"A", "B", "C"}:
+        if self._phase_wiring.active_pt is not None and self._phase_wiring.wired == {"A", "B", "C"}:
             return PhaseWiringStatus.READY
         return PhaseWiringStatus.WIRING
 
@@ -52,31 +55,62 @@ class PhaseWiringMixin:
         return self._phase_wiring.active_pt
 
     def _phase_target_nodes(self) -> tuple[str, ...]:
-        pt_name = self._phase_wiring.active_pt
-        if pt_name not in ("PT1", "PT3"):
+        if not self._phase_wiring.enabled:
             return ()
-        return tuple(f"{pt_name}_{phase}" for phase in ("A", "B", "C"))
+        active_pt = self._phase_wiring.active_pt
+        if active_pt in self._PHASE_SEQ_PTS and self.get_phase_wiring_status() != PhaseWiringStatus.READY:
+            pts = (active_pt,)
+        else:
+            pts = self._PHASE_SEQ_PTS
+        return tuple(f"{pt}_{phase}" for pt in pts for phase in ("A", "B", "C"))
+
+    def enable_phase_seq_meter(self) -> None:
+        self._phase_wiring.enabled = True
+        self._phase_wiring.active_pt = None
+        self._phase_wiring.wired.clear()
+        self.phase_seq_meter.set_waiting("相序仪", 0, 3)
+        self.phase_seq_meter.set_freq(50.0)
+        self._place_phase_seq_meter()
+        self._psm_result_lbl.setVisible(False)
+        self.canvas2.draw_idle()
 
     def connect_phase_seq_meter(self, pt_name: str) -> None:
         pt_name = pt_name.upper()
+        if pt_name not in self._PHASE_SEQ_PTS:
+            return
+        self._phase_wiring.enabled = True
         self._phase_wiring.active_pt = pt_name
         self._phase_wiring.wired.clear()
 
         self.phase_seq_meter.set_waiting(pt_name, 0, 3)
-        sim = self._api.sim_state
-        freq = sim.gen1.freq if pt_name in ("PT1", "PT2") else sim.gen2.freq
-        self.phase_seq_meter.set_freq(freq)
+        self.phase_seq_meter.set_freq(self._phase_meter_frequency(pt_name))
         self._place_phase_seq_meter()
         self._psm_result_lbl.setVisible(False)
         self.canvas2.draw_idle()
 
     def disconnect_phase_seq_meter(self) -> None:
+        self._phase_wiring.enabled = False
         self._phase_wiring.active_pt = None
         self._phase_wiring.wired.clear()
         self.phase_seq_meter.disconnect()
         self.phase_seq_meter.setVisible(False)
         self._psm_result_lbl.setVisible(False)
         self.canvas2.draw_idle()
+
+    def _phase_meter_frequency(self, pt_name: str) -> float:
+        sim = self._api.sim_state
+        if pt_name == "PT3":
+            return sim.gen2.freq
+        if pt_name == "PT2" and getattr(self, "bus_live", False):
+            return getattr(self, "bus_freq", 50.0)
+        return sim.gen1.freq
+
+    def _start_phase_wiring_target(self, pt_name: str) -> None:
+        self._phase_wiring.active_pt = pt_name
+        self._phase_wiring.wired.clear()
+        self.phase_seq_meter.set_waiting(pt_name, 0, 3)
+        self.phase_seq_meter.set_freq(self._phase_meter_frequency(pt_name))
+        self._psm_result_lbl.setVisible(False)
 
     def _show_phase_seq_result(self, pt_name: str, seq: str) -> None:
         self.phase_seq_meter.connect_pt(pt_name, seq)
@@ -108,7 +142,7 @@ class PhaseWiringMixin:
         self.canvas2.draw_idle()
 
     def handle_phase_wiring_click(self, event) -> bool:
-        if self.get_phase_wiring_status() != PhaseWiringStatus.WIRING:
+        if self.get_phase_wiring_status() == PhaseWiringStatus.IDLE:
             return False
         if event.inaxes != self.ax_circuit or event.xdata is None or event.ydata is None:
             return True
@@ -125,7 +159,10 @@ class PhaseWiringMixin:
         if closest_node is None:
             return True
 
-        phase = closest_node.rsplit("_", 1)[1]
+        pt_name, phase = closest_node.split("_", 1)
+        if self._phase_wiring.active_pt != pt_name or self.get_phase_wiring_status() == PhaseWiringStatus.READY:
+            self._start_phase_wiring_target(pt_name)
+
         if phase not in self._phase_wiring.wired:
             self._phase_wiring.wired.add(phase)
             self.phase_seq_meter.set_waiting(
@@ -143,17 +180,17 @@ class PhaseWiringMixin:
     def _render_phase_wiring(self) -> None:
         active_pt = self._phase_wiring.active_pt
         wired = self._phase_wiring.wired
+        status = self.get_phase_wiring_status()
 
         for node_name, pack in self._psm_terminal_markers.items():
             pt_name, phase = node_name.split("_", 1)
-            is_target = (
-                active_pt == pt_name
-                and self.get_phase_wiring_status() in {
-                    PhaseWiringStatus.WIRING,
-                    PhaseWiringStatus.READY,
-                }
-            )
-            is_wired = is_target and phase in wired
+            if status == PhaseWiringStatus.IDLE:
+                is_target = False
+            elif active_pt is None:
+                is_target = True
+            else:
+                is_target = active_pt == pt_name
+            is_wired = is_target and active_pt == pt_name and phase in wired
 
             pack["ring"].set_visible(is_target)
             pack["fill"].set_visible(is_wired)
