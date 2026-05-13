@@ -62,7 +62,7 @@ class PhysicsEngine(WaveformMixin, ArbitrationMixin, ProtectionMixin, Measuremen
         self.i2_rms, self.ip2, self.iq2 = 0, 0, 0
         self.ground_msg, self.ground_color = "N线: 未接地", "gray"
 
-        self.meter_reading = "请用表笔点击两个端子"
+        self.meter_reading = "----"
         self.meter_color = "black"
         self.meter_voltage = None
         self.meter_status = "idle"

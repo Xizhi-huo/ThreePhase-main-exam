@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from PyQt5 import QtCore, QtWidgets
 
 from domain.constants import DEFAULT_PT_RATIO_ROWS, GRID_AMP
+from domain.enums import BreakerPosition
 from domain.fault_scenarios import SCENARIOS
 from domain.free_exam_state import FreeExamState
 from domain.models import GeneratorState, SimulationState
@@ -23,6 +24,40 @@ from services.hardware_actions import HardwareActions
 from services.phase_order_resolver import PhaseOrderResolver
 from services.physics_engine import PhysicsEngine
 from ui.main_window import PowerSyncUI
+
+
+PRIMARY_CONTACT_ACCIDENTS = (
+    (
+        "万用表绝缘击穿",
+        "普通表笔接触带电一次侧，高压击穿表笔绝缘并损坏仪表。",
+        "小伙汁，万用表替你扛了一下，但现场它不一定扛得住。",
+    ),
+    (
+        "弧光闪络",
+        "一次侧高压点发生弧光闪络，柜内保护动作，操作中止。",
+        "小伙汁，这一下在屏幕里只是弹窗，现场就是弧光和冲击波了。",
+    ),
+    (
+        "相间短路",
+        "表笔跨越高压相间距离，引发相间短路和开关柜跳闸。",
+        "小伙汁，三相不是这么“握手”的，现场这一碰可能直接炸柜。",
+    ),
+    (
+        "对地放电",
+        "高压侧经表笔形成对地放电路径，接地保护动作。",
+        "小伙汁，电流已经给自己找路了，现场你可能也在路上。",
+    ),
+    (
+        "表笔熔毁",
+        "测试线绝缘和金属端部过热熔毁，仪表端口损坏。",
+        "小伙汁，表笔先融了算你运气好，现场下一步可能就轮到人了。",
+    ),
+    (
+        "人身触电风险",
+        "带电一次侧接触形成严重人身触电风险，安全闭锁动作。",
+        "小伙汁，在这里我能救你一命，现场就没这么好运了。",
+    ),
+)
 
 
 class PowerSyncController:
@@ -216,32 +251,32 @@ class PowerSyncController:
             }
 
         sequence = phase_meter.current_sequence()
-        label = self._phase_sequence_label(sequence)
-        if sequence == "unknown":
-            reading = f"{pt_name} 相序仪未得到有效结果"
+        if sequence in {"unknown", "FAULT"}:
+            reading = f"{pt_name} 相序：----"
             record_status = "waiting"
+            recorded_sequence = "unknown"
         else:
+            label = self._phase_sequence_label(sequence)
             reading = f"{pt_name} 相序：{sequence}（{label}）"
-            record_status = "ok" if label == "正序" else "warning" if label == "不平衡/故障" else "danger"
+            record_status = "ok"
+            recorded_sequence = sequence
 
         return {
             "kind": "phase_sequence",
             "pt_name": pt_name,
             "nodes": nodes,
             "reading": reading,
-            "value": sequence,
+            "value": recorded_sequence,
             "status": record_status,
-            "phase_sequence": sequence,
+            "phase_sequence": recorded_sequence,
         }
 
     @staticmethod
     def _phase_sequence_label(sequence: str) -> str:
         if sequence in {"ABC", "BCA", "CAB"}:
             return "正序"
-        if sequence == "FAULT":
-            return "不平衡/故障"
-        if sequence == "unknown":
-            return "未知"
+        if sequence in {"FAULT", "unknown"}:
+            return "----"
         return "反序"
 
     def get_generator_state(self, gen_id: int):
@@ -262,6 +297,50 @@ class PowerSyncController:
 
     def record_free_exam_measurement(self) -> bool:
         return self.free_exam_svc.record_current_measurement()
+
+    def handle_primary_probe_contact(self, node_name: str) -> str | None:
+        if not self._is_primary_voltage_node(node_name):
+            return None
+        if not self._is_primary_voltage_node_live(node_name):
+            return None
+
+        title, consequence, caption = random.choice(PRIMARY_CONTACT_ACCIDENTS)
+        message = f"风险：{title}\n\n后果：{consequence}\n\n{caption}\n\n本次考核终止。"
+        if not self.free_exam_svc.register_safety_accident(message):
+            return None
+
+        self.sim_state.probe1_node = None
+        self.sim_state.probe2_node = None
+        return message
+
+    @staticmethod
+    def _is_primary_voltage_node(node_name: str) -> bool:
+        return node_name.startswith("PRI_PT")
+
+    def _is_primary_voltage_node_live(self, node_name: str) -> bool:
+        parts = node_name.split("_")
+        if len(parts) < 3:
+            return False
+
+        sim = self.sim_state
+        pt_name = parts[1]
+        gen1_on_bus = (
+            sim.gen1.breaker_position == BreakerPosition.WORKING
+            and sim.gen1.breaker_closed
+        )
+        gen2_on_bus = (
+            sim.gen2.breaker_position == BreakerPosition.WORKING
+            and sim.gen2.breaker_closed
+        )
+        bus_live = bool(getattr(self.physics, "bus_live", False) or gen1_on_bus or gen2_on_bus)
+
+        if pt_name == "PT1":
+            return bool(sim.gen1.running)
+        if pt_name == "PT2":
+            return bus_live
+        if pt_name == "PT3":
+            return bool(sim.gen2.running)
+        return False
 
     def get_blackbox_runtime_state(self, target: str):
         return self.blackbox_handler.get_blackbox_runtime_state(target)
@@ -303,6 +382,19 @@ class PowerSyncController:
         self._pending_pt_ratio_row_updates.clear()
         return updates
 
+    def update_pt_ratio(self, ratio_attr: str, primary_value: int, secondary_value: int) -> bool:
+        if ratio_attr not in DEFAULT_PT_RATIO_ROWS or secondary_value <= 0:
+            return False
+        ratio = float(primary_value) / float(secondary_value)
+        setattr(self.sim_state, ratio_attr, ratio)
+        self.fault_mgr.maybe_repair_pt_ratio_fault(
+            ratio_attr,
+            ratio,
+            step=0,
+            source="free_exam_pt_ratio_panel",
+        )
+        return True
+
     def mark_fault_detected(self, **payload) -> bool:
         fc = self.sim_state.fault_config
         if fc.active and not fc.repaired:
@@ -336,9 +428,10 @@ class PowerSyncController:
             gen.actual_amp = 0.0
         sim.auto_sync_active = False
         sim.sync_target = None
+        sim.multimeter_mode = False
         sim.probe1_node = None
         sim.probe2_node = None
-        sim.loop_test_mode = False
+        sim.grounding_mode = "小电阻接地"
         sim.fault_reverse_bc = False
 
         self.phase_order_state.reset_pt_phase_orders()
@@ -385,7 +478,7 @@ class PowerSyncController:
         traceback.print_exc()
         if self._consecutive_tick_failures == 3 and not self._tick_error_notified:
             self.ui.statusBar().showMessage(
-                f"物理帧更新连续失败 {self._consecutive_tick_failures} 次（阶段: {stage}），请检查控制台错误日志。"
+                f"物理帧更新连续失败 {self._consecutive_tick_failures} 次（阶段: {stage}），控制台错误日志包含详细信息。"
             )
             self._tick_error_notified = True
         if self._consecutive_tick_failures >= self._TICK_FAILURE_THRESHOLD and self._timer.isActive():

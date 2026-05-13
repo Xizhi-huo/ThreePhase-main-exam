@@ -158,7 +158,7 @@ class PhaseSeqMeterWidget(QtWidgets.QWidget):
             elif self._direction == -1:
                 line2, c2 = "反序 ↺", '#e74c3c'
             else:
-                line2, c2 = "异常", '#aaaaaa'
+                line2, c2 = "----", '#aaaaaa'
         else:
             line1, line2, c2 = "未接入", "—", '#555555'
 

@@ -124,7 +124,7 @@ class WaveformTab(QtWidgets.QWidget):
         self.wave_bus_badge = self._make_badge("母线状态", "neutral")
         self.wave_ref_badge = self._make_badge("参考源", "info")
         self.wave_mode_badge = self._make_badge("运行模式", "primary")
-        self.wave_sync_badge = self._make_badge("同期判定", "warning")
+        self.wave_sync_badge = self._make_badge("同期参数", "warning")
 
         badges.addWidget(self.wave_bus_badge)
         badges.addWidget(self.wave_ref_badge)
@@ -143,7 +143,7 @@ class WaveformTab(QtWidgets.QWidget):
             ("delta_f", "Δf", "频差"),
             ("delta_v", "ΔV", "压差"),
             ("delta_theta", "Δθ", "相角差"),
-            ("sync_state", "同期判定", "当前可否合闸"),
+            ("sync_state", "同期参数", "频差 / 压差 / 相角差"),
             ("mode", "运行模式", "机组状态"),
         ]
         for key, title, caption in cards:
@@ -199,7 +199,7 @@ class WaveformTab(QtWidgets.QWidget):
         sync_card = self._make_panel_card()
         sync_layout = sync_card.layout()
 
-        sync_title = QtWidgets.QLabel("同期判定面板")
+        sync_title = QtWidgets.QLabel("同期参数面板")
         sync_title.setProperty("sectionTitle", True)
         sync_layout.addWidget(sync_title)
 
@@ -210,12 +210,12 @@ class WaveformTab(QtWidgets.QWidget):
         self.sync_state_hero.setMinimumHeight(56)
         sync_layout.addWidget(self.sync_state_hero)
 
-        self.sync_state_hint = QtWidgets.QLabel("直接展示三项差值和是否允许合闸。")
+        self.sync_state_hint = QtWidgets.QLabel("显示频差、压差和相角差。")
         self.sync_state_hint.setProperty("sectionCaption", True)
         self.sync_state_hint.setWordWrap(True)
         sync_layout.addWidget(self.sync_state_hint)
 
-        criteria_title = QtWidgets.QLabel("同期条件")
+        criteria_title = QtWidgets.QLabel("同期参数范围")
         criteria_title.setProperty("sectionTitle", True)
         sync_layout.addWidget(criteria_title)
 
@@ -450,7 +450,7 @@ class WaveformTab(QtWidgets.QWidget):
         self._set_badge(self.wave_bus_badge, bus_text, "success" if rs.bus_live else "neutral")
         self._set_badge(self.wave_ref_badge, ref_badge_text, "info")
         self._set_badge(self.wave_mode_badge, mode_text, "primary")
-        self._set_badge(self.wave_sync_badge, f"同期判定：{sync_state}", sync_tone)
+        self._set_badge(self.wave_sync_badge, f"同期参数：{sync_state}", sync_tone)
 
         self._update_metric_card("delta_f", f"{delta_f:+.2f} Hz", "相对参考频率", freq_tone)
         self._update_metric_card("delta_v", f"{delta_v:.0f} V", "相对参考电压", volt_tone)
@@ -473,12 +473,12 @@ class WaveformTab(QtWidgets.QWidget):
         self._set_badge(self.wave_bus_badge, bus_text, "neutral")
         self._set_badge(self.wave_ref_badge, "参考基准: 无", "neutral")
         self._set_badge(self.wave_mode_badge, mode_text, "primary")
-        self._set_badge(self.wave_sync_badge, "同期判定: 无参考源", "neutral")
+        self._set_badge(self.wave_sync_badge, "同期参数: 无参考源", "neutral")
 
         self._update_metric_card("delta_f", "--", "当前无母排参考", "neutral")
         self._update_metric_card("delta_v", "--", "当前无母排参考", "neutral")
         self._update_metric_card("delta_theta", "--", "当前无母排参考", "neutral")
-        self._update_metric_card("sync_state", "无参考源", "需先建立母排参考后再判定。", "neutral")
+        self._update_metric_card("sync_state", "无参考源", "当前无母排参考。", "neutral")
         self._update_metric_card("mode", mode_text, "当前机组方式", "primary")
 
         self._set_sync_criteria_unavailable("freq")
@@ -629,7 +629,7 @@ class WaveformTab(QtWidgets.QWidget):
             text = f"{abs(value):.0f} {unit}"
         row["value"].setText(text)
         self._set_widget_props(row["value"], recordValue=True, tone=tone)
-        badge_text = "通过" if tone == "success" else "接近" if tone == "warning" else "未通过"
+        badge_text = "范围内" if tone == "success" else "邻近" if tone == "warning" else "范围外"
         self._set_badge(row["badge"], badge_text, tone)
 
     def _set_sync_criteria_unavailable(self, key):
@@ -655,22 +655,22 @@ class WaveformTab(QtWidgets.QWidget):
 
     def _sync_state(self, rs, sim, delta_f, delta_v, delta_theta):
         if sim.gen2.mode == "stop":
-            return "Gen2 未运行", "neutral", "先启动 Gen2，再观察三项同期条件是否进入允许范围。"
+            return "Gen2 停止", "neutral", "Gen2 当前未输出运行参数。"
         if not rs.bus_live:
-            return "母线未带电", "info", "当前母线未带电，本页按额定值进行参考监视。"
+            return "无母排参考", "info", "母排未带电，按额定值显示参考差值。"
 
         freq_ok = abs(delta_f) <= SYNC_FREQ_OK_HZ
         volt_ok = abs(delta_v) <= SYNC_VOLT_OK_V
         phase_ok = abs(delta_theta) <= SYNC_PHASE_OK_DEG
         if freq_ok and volt_ok and phase_ok:
-            return "允许合闸", "success", "三项条件均已进入允许范围，可执行同期合闸。"
+            return "参数范围内", "success", "频差、压差和相角差均在设定范围内。"
         if (
             abs(delta_f) <= SYNC_WARN_FREQ_HZ
             and abs(delta_v) <= SYNC_WARN_VOLT_V
             and abs(delta_theta) <= SYNC_WARN_PHASE_DEG
         ):
-            return "接近就绪", "warning", "条件正在收敛，但相角差或压差仍需继续观察。"
-        return "未就绪", "danger", "当前仍不满足同期合闸条件，应继续调整或等待自动收敛。"
+            return "参数邻近", "warning", "频差、压差和相角差接近设定范围。"
+        return "参数范围外", "danger", "频差、压差或相角差超出设定范围。"
 
     def _mode_text(self, mode):
         mapping = {

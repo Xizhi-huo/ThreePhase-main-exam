@@ -55,7 +55,6 @@ class SimulationState:
     grounding_mode: str = "小电阻接地"
     probe1_node: Optional[str] = None
     probe2_node: Optional[str] = None
-    loop_test_mode: bool = False        # 第一步回路检查模式：允许不起机合闸，跳过失压联锁
     pt_gen_ratio: float = DEFAULT_PT_GEN_RATIO   # PT1 (Gen1侧) 变比（可由用户在第二步修改）
     pt3_ratio:   float = DEFAULT_PT3_RATIO       # PT3 (Gen2侧) 变比（可由用户在第二步修改）
     pt_bus_ratio: float = DEFAULT_PT_BUS_RATIO   # PT2 母排侧变比（10500:105 = 100，二次侧额定 105V）

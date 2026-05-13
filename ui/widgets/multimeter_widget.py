@@ -308,15 +308,17 @@ class MultimeterWidget(QtWidgets.QWidget):
         if self._mode == 'off' or st == 'idle':
             return ('- - - -', self._LCD_DIM)
 
-        if st == 'invalid':
-            return ('O.L', self._LCD_WARN)
+        if st in {'waiting', 'not_connected', 'invalid'}:
+            return ('- - - -', self._LCD_DIM)
+        if st == 'protect':
+            return ('Err', self._LCD_WARN)
 
         if self._mode == 'resistance':
             if st == 'ok':
                 return ('≈ 0', self._LCD_DIGIT)
-            if st == 'danger':
-                return ('未导通', self._LCD_WARN)
-            return ('O.L', self._LCD_WARN)
+            if st in {'open', 'danger'}:
+                return ('O.L', self._LCD_WARN)
+            return ('- - - -', self._LCD_DIM)
 
         # voltage_ac
         if v is None:

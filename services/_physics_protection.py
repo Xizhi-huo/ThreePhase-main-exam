@@ -35,12 +35,10 @@ class ProtectionMixin:
     """继电保护、垂降控制、环流监控与断路器状态机。"""
 
     def _apply_engine_trip_interlocks(self, sim) -> None:
-        if sim.loop_test_mode:
-            return
-        if sim.gen1.breaker_closed and not sim.gen1.running:
+        if sim.gen1.breaker_closed and not sim.gen1.running and sim.gen1.breaker_position == BreakerPosition.WORKING:
             sim.gen1.breaker_closed = False
             self.relay_msg, self.relay_color = "⚠️ 保护: Gen 1 引擎停机失压，断路器自动脱扣！", "orange"
-        if sim.gen2.breaker_closed and not sim.gen2.running:
+        if sim.gen2.breaker_closed and not sim.gen2.running and sim.gen2.breaker_position == BreakerPosition.WORKING:
             sim.gen2.breaker_closed = False
             self.relay_msg, self.relay_color = "⚠️ 保护: Gen 2 引擎停机失压，断路器自动脱扣！", "orange"
 
@@ -164,8 +162,8 @@ class ProtectionMixin:
         elif generator.mode == "manual" and generator.cmd_close:
             generator.cmd_close = False
             if not generator.breaker_closed:
-                test_mode = getattr(self._sim_state, 'loop_test_mode', False)
-                if generator.breaker_position != BreakerPosition.WORKING or sync_ok or test_mode:
+                test_mode = generator.breaker_position == BreakerPosition.TEST
+                if generator.breaker_position == BreakerPosition.TEST or sync_ok:
                     # E01/E02/E03 故障：Gen2 工作位手动合闸到带电母线时触发事故弹窗
                     fc = self._sim_state.fault_config
                     if (gen_id == 2
@@ -210,7 +208,7 @@ class ProtectionMixin:
             elif generator.breaker_position == BreakerPosition.TEST:
                 setattr(self, text_attr, "二次侧: 模拟闭合 (试验位)")
                 setattr(self, bg_attr, "#ffaa00")
-                setattr(self, visual_attr, False)
+                setattr(self, visual_attr, True)
             else:
                 setattr(self, text_attr, "无效: 触头闭合 (脱开位)")
                 setattr(self, bg_attr, "gray")

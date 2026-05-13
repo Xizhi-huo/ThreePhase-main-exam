@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Callable
@@ -105,8 +105,6 @@ class BlackboxRepairHandler:
                 'pri_order': list(_NORMAL_ORDER),
                 'sec_order': list(pt_phase_orders.get('PT3', _NORMAL_ORDER)),
                 'sec_polarity': sec_polarity,
-                'sec_ratio_secondary': int(round(11000.0 / self._sim_state.pt3_ratio)),
-                'ratio_primary': 11000,
                 'repair_target': 'PT3' if self._flow_mgr.can_repair_in_blackbox() else None,
             }
         raise ValueError(f"Unsupported blackbox target: {target}")
@@ -123,10 +121,8 @@ class BlackboxRepairHandler:
             initial_sec_order=None,
             new_sec_order=None,
             initial_sec_polarity=None,
-            new_sec_polarity=None,
-            new_sec_ratio_secondary: int | None = None) -> BlackboxRepairOutcome:
+            new_sec_polarity=None) -> BlackboxRepairOutcome:
         component_correct = False
-        ratio_fault_cleared = False
 
         if target == 'G1':
             self._set_g1_blackbox_order(list(new_order))
@@ -161,17 +157,6 @@ class BlackboxRepairHandler:
                 list(new_sec_order) == _NORMAL_ORDER
                 and polarity_correct
             )
-            fault_mgr = self._get_fault_mgr()
-            if (new_sec_ratio_secondary is not None
-                    and new_sec_ratio_secondary > 0):
-                new_ratio = 11000.0 / float(new_sec_ratio_secondary)
-                self._sim_state.pt3_ratio = new_ratio
-                ratio_fault_cleared = fault_mgr.maybe_repair_pt_ratio_fault(
-                    'pt3_ratio',
-                    new_ratio,
-                    step=step,
-                    source='PT3_ratio_blackbox',
-                )
         else:
             raise ValueError(f"Unsupported blackbox repair target: {target}")
 
@@ -179,21 +164,18 @@ class BlackboxRepairHandler:
             return BlackboxRepairOutcome(
                 target=target,
                 component_correct=False,
-                fault_cleared=ratio_fault_cleared,
-                message="× 接线仍有错误，请重新调整后再提交。",
+                fault_cleared=False,
+                message="接线已保存。",
                 message_color="#dc2626",
-                disable_repair_button=ratio_fault_cleared,
+                disable_repair_button=False,
             )
 
         fault_config = self._sim_state.fault_config
         fault_active = bool(fault_config.active and not fault_config.repaired)
-        fault_cleared = ratio_fault_cleared
-        disable_repair_button = ratio_fault_cleared
+        fault_cleared = False
+        disable_repair_button = False
         fault_mgr = self._get_fault_mgr()
-        if ratio_fault_cleared:
-            message = "✓ 此处接线已修复。请关闭并检查其他位置的接线。"
-            message_color = "#0369a1"
-        elif (
+        if (
             fault_active
             and target == 'PT3'
             and fault_config.scenario_id == 'E03'
@@ -201,7 +183,7 @@ class BlackboxRepairHandler:
             fault_mgr.repair_fault(step=step, source='PT3_polarity_blackbox')
             fault_cleared = True
             disable_repair_button = True
-            message = "✓ PT3 A 相极性已恢复，故障已清除。请关闭黑盒后重新测量。"
+            message = "接线已保存。"
             message_color = "#15803d"
         elif (
             fault_active
@@ -211,10 +193,10 @@ class BlackboxRepairHandler:
             fault_mgr.repair_fault(step=step, source=f'{target}_blackbox')
             fault_cleared = True
             disable_repair_button = True
-            message = "✓ 全部接线均已修复，故障已完全清除。"
+            message = "接线已保存。"
             message_color = "#15803d"
         else:
-            message = "✓ 此处接线已修复。请关闭并检查其他位置的接线。"
+            message = "接线已保存。"
             message_color = "#0369a1"
 
         return BlackboxRepairOutcome(

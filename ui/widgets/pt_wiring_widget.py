@@ -41,9 +41,6 @@ class PTWiringWidget(QtWidgets.QWidget):
             interactive_pri=False,
             interactive_sec=False,
             interactive_polarity=False,
-            sec_ratio_secondary: int | None = None,
-            interactive_ratio: bool = False,
-            ratio_primary: int = 11000,
             parent=None):
         """pri_order/sec_order 为本级置换，pri_input_order 为上游实际来相顺序。"""
         super().__init__(parent)
@@ -51,24 +48,13 @@ class PTWiringWidget(QtWidgets.QWidget):
         self._sec_order = list(sec_order)
         self._pri_input_order = list(pri_input_order or ['A', 'B', 'C'])
         self._sec_polarity = _normalize_polarity(sec_polarity)
-        self._has_ratio_widget = sec_ratio_secondary is not None
-        self._ratio_sec_edit = None
         self.interactive_pri = interactive_pri
         self.interactive_sec = interactive_sec
         self.interactive_polarity = interactive_polarity
         self._sel_sec = None
         self._sel_pri = None
-        self.setFixedSize(410, 620 if self._has_ratio_widget else 560)
-        if self._has_ratio_widget:
-            primary_label = QtWidgets.QLabel(f"一次侧 {ratio_primary} V :", self)
-            primary_label.setGeometry(36, 562, 118, 24)
-            ratio_label = QtWidgets.QLabel("PT3 二次额定 (V):", self)
-            ratio_label.setGeometry(158, 562, 126, 24)
-            self._ratio_sec_edit = QtWidgets.QLineEdit(str(sec_ratio_secondary), self)
-            self._ratio_sec_edit.setValidator(QtGui.QIntValidator(1, 9999, self))
-            self._ratio_sec_edit.setEnabled(interactive_ratio)
-            self._ratio_sec_edit.setGeometry(288, 562, 70, 24)
-        if interactive_pri or interactive_sec or interactive_polarity or interactive_ratio:
+        self.setFixedSize(410, 560)
+        if interactive_pri or interactive_sec or interactive_polarity:
             self.setCursor(QtCore.Qt.PointingHandCursor)
 
     def get_pri_order(self):
@@ -79,14 +65,6 @@ class PTWiringWidget(QtWidgets.QWidget):
 
     def get_sec_polarity(self):
         return list(self._sec_polarity)
-
-    def get_sec_ratio_secondary(self):
-        if not self._has_ratio_widget:
-            return None
-        try:
-            return int(self._ratio_sec_edit.text())
-        except (ValueError, AttributeError):
-            return None
 
     def _primary_actual_order(self):
         labels = ('A', 'B', 'C')

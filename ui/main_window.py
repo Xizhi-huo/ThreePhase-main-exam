@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 from ui.panels.control_panel import WidgetBuilderMixin
 from ui.styles import apply_app_theme
 from ui.tabs.circuit_tab import CircuitTab
 from ui.tabs.waveform_tab import WaveformTab
+
+
+ACCIDENT_IMAGE_PATH = Path(__file__).resolve().parents[1] / "image" / "Screenshot.png"
+ACCIDENT_WARNING_TITLE = "\u4e00\u6b21\u4fa7\u5e26\u7535\u63a5\u89e6"
 
 
 class PowerSyncUI(WidgetBuilderMixin, QtWidgets.QMainWindow):
@@ -137,6 +143,7 @@ class PowerSyncUI(WidgetBuilderMixin, QtWidgets.QMainWindow):
             "success" if sim.paused else "warning",
             hero=True,
         )
+        self._run_controls_page.sync_pt_ratio_rows_from_state()
         self._gen1_card.refresh()
         self._gen2_card.refresh()
 
@@ -151,7 +158,9 @@ class PowerSyncUI(WidgetBuilderMixin, QtWidgets.QMainWindow):
         tab_index = self.ctrl.consume_requested_ui_tab()
         if tab_index is not None and 0 <= tab_index < self.tab_widget.count():
             self.tab_widget.setCurrentIndex(tab_index)
-        self.ctrl.consume_requested_pt_ratio_row_updates()
+        ratio_updates = self.ctrl.consume_requested_pt_ratio_row_updates()
+        if ratio_updates:
+            self._run_controls_page.apply_pt_ratio_row_updates(ratio_updates)
 
     def render_visuals(self, rs) -> None:
         self._consume_controller_ui_requests()
@@ -167,8 +176,152 @@ class PowerSyncUI(WidgetBuilderMixin, QtWidgets.QMainWindow):
         elif self.tab_widget.currentIndex() == 1:
             self._circuit_tab.redraw_canvas()
 
+    @staticmethod
+    def _strip_accident_prefix(text: str, prefix: str) -> str:
+        return text[len(prefix):].strip() if text.startswith(prefix) else text.strip()
+
+    def _parse_accident_message(self, message: str) -> tuple[str, str, str, str]:
+        parts = [part.strip() for part in message.split("\n\n") if part.strip()]
+        risk = self._strip_accident_prefix(parts[0], "风险：") if parts else ACCIDENT_WARNING_TITLE
+        consequence = self._strip_accident_prefix(parts[1], "后果：") if len(parts) > 1 else message
+        caption = parts[2] if len(parts) > 2 else ""
+        ending = parts[3] if len(parts) > 3 else "本次考核终止。"
+        return risk, consequence, caption, ending
+
+    def _show_accident_warning(self, title: str, message: str) -> None:
+        risk, consequence, caption, ending = self._parse_accident_message(message)
+
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle(title)
+        dialog.setModal(True)
+        dialog.resize(640, 700)
+        dialog.setStyleSheet(
+            """
+            QDialog {
+                background: #0f172a;
+            }
+            QLabel {
+                font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+                letter-spacing: 0px;
+            }
+            QPushButton {
+                min-width: 110px;
+                min-height: 34px;
+                border-radius: 6px;
+                background: #dc2626;
+                color: white;
+                font-weight: 700;
+                font-size: 13px;
+                padding: 6px 18px;
+            }
+            QPushButton:hover {
+                background: #b91c1c;
+            }
+            """
+        )
+
+        layout = QtWidgets.QVBoxLayout(dialog)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(10)
+
+        header = QtWidgets.QFrame()
+        header.setStyleSheet(
+            "QFrame {"
+            "background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #7f1d1d, stop:1 #dc2626);"
+            "border: 1px solid #fca5a5; border-radius: 12px;"
+            "}"
+        )
+        header_layout = QtWidgets.QVBoxLayout(header)
+        header_layout.setContentsMargins(16, 12, 16, 12)
+        header_layout.setSpacing(4)
+
+        eyebrow_lbl = QtWidgets.QLabel("一次侧带电接触")
+        eyebrow_lbl.setStyleSheet("font-size:12px; font-weight:700; color:#fecaca;")
+        header_layout.addWidget(eyebrow_lbl)
+
+        risk_lbl = QtWidgets.QLabel(risk)
+        risk_lbl.setWordWrap(True)
+        risk_lbl.setStyleSheet("font-size:26px; font-weight:900; color:#ffffff;")
+        header_layout.addWidget(risk_lbl)
+        layout.addWidget(header)
+
+        consequence_panel = QtWidgets.QFrame()
+        consequence_panel.setStyleSheet(
+            "QFrame { background:#fff7ed; border:1px solid #fb923c; border-radius:10px; }"
+        )
+        consequence_layout = QtWidgets.QVBoxLayout(consequence_panel)
+        consequence_layout.setContentsMargins(14, 10, 14, 10)
+        consequence_layout.setSpacing(5)
+
+        consequence_title = QtWidgets.QLabel("工程后果")
+        consequence_title.setStyleSheet("font-size:12px; font-weight:900; color:#9a3412;")
+        consequence_layout.addWidget(consequence_title)
+
+        consequence_lbl = QtWidgets.QLabel(consequence)
+        consequence_lbl.setWordWrap(True)
+        consequence_lbl.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+        consequence_lbl.setStyleSheet("font-size:15px; font-weight:700; color:#431407; line-height:150%;")
+        consequence_layout.addWidget(consequence_lbl)
+        layout.addWidget(consequence_panel)
+
+        if caption:
+            caption_panel = QtWidgets.QFrame()
+            caption_panel.setStyleSheet(
+                "QFrame { background:#422006; border:1px solid #fbbf24; border-radius:10px; }"
+            )
+            caption_layout = QtWidgets.QVBoxLayout(caption_panel)
+            caption_layout.setContentsMargins(14, 10, 14, 10)
+            caption_lbl = QtWidgets.QLabel(caption)
+            caption_lbl.setWordWrap(True)
+            caption_lbl.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+            caption_lbl.setStyleSheet("font-size:18px; font-weight:900; color:#fde68a; line-height:150%;")
+            caption_layout.addWidget(caption_lbl)
+            layout.addWidget(caption_panel)
+
+        if ACCIDENT_IMAGE_PATH.exists():
+            pixmap = QtGui.QPixmap(str(ACCIDENT_IMAGE_PATH))
+            if not pixmap.isNull():
+                image_frame = QtWidgets.QFrame()
+                image_frame.setStyleSheet(
+                    "QFrame { background:#020617; border:1px solid #334155; border-radius:10px; }"
+                )
+                image_layout = QtWidgets.QVBoxLayout(image_frame)
+                image_layout.setContentsMargins(8, 8, 8, 8)
+                image_lbl = QtWidgets.QLabel()
+                image_lbl.setAlignment(QtCore.Qt.AlignCenter)
+                image_lbl.setPixmap(
+                    pixmap.scaled(
+                        520,
+                        280,
+                        QtCore.Qt.KeepAspectRatio,
+                        QtCore.Qt.SmoothTransformation,
+                    )
+                )
+                image_layout.addWidget(image_lbl)
+                layout.addWidget(image_frame, 0, QtCore.Qt.AlignCenter)
+
+        ending_lbl = QtWidgets.QLabel(ending)
+        ending_lbl.setAlignment(QtCore.Qt.AlignCenter)
+        ending_lbl.setStyleSheet(
+            "font-size:18px; font-weight:900; color:#ffffff; background:#991b1b;"
+            "border:1px solid #fca5a5; border-radius:8px; padding:8px 10px;"
+        )
+        layout.addWidget(ending_lbl)
+
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok)
+        ok_button = buttons.button(QtWidgets.QDialogButtonBox.Ok)
+        if ok_button is not None:
+            ok_button.setText("我知道了")
+        buttons.accepted.connect(dialog.accept)
+        layout.addWidget(buttons, 0, QtCore.Qt.AlignRight)
+        dialog.exec_()
+
     def show_warning(self, title: str, message: str) -> None:
         self._consume_controller_ui_requests()
+        if title == ACCIDENT_WARNING_TITLE:
+            self._show_accident_warning(title, message)
+            return
+
         dialog = QtWidgets.QDialog(self)
         dialog.setWindowTitle(title)
         dialog.setModal(True)

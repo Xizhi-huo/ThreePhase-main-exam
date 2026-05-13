@@ -6,6 +6,7 @@ services/_physics_measurement.py
 import numpy as np
 
 from domain.constants import NEUTRAL_RESISTOR_OHMS
+from domain.enums import BreakerPosition
 from domain.node_map import NODES
 
 # 三相标准相位角：A=0°, B=-120°, C=+120°
@@ -123,59 +124,67 @@ class MeasurementMixin:
             self.pt3_v = a2 / sim.pt3_ratio
 
     def _handle_loop_measurement(self, sim, n1, n2, info1, info2) -> None:
+        self.meter_voltage = None
+        self.meter_nodes = (n1, n2)
+
         if sim.gen1.running or sim.gen2.running:
-            self.meter_status = "invalid"
-            self.meter_color = "red"
-            self.meter_reading = "⚠ 危险：发电机运行中，通断测试须先停机，高压将损坏万用表"
-        elif sim.grounding_mode != "断开":
-            self.meter_status = "invalid"
-            self.meter_color = "red"
-            self.meter_reading = "通断测试前请先断开中性点接地（防止通过中性点形成寄生回路）"
-        elif not (sim.gen1.breaker_closed and sim.gen2.breaker_closed):
-            self.meter_status = "invalid"
-            self.meter_color = "red"
-            self.meter_reading = "通断测试前请先闭合 Gen1 和 Gen2 断路器（使被测回路形成完整通路）"
-        elif info1[2] == info2[2]:
-            self.meter_status = "invalid"
-            self.meter_reading = "请分别选择 G1 与 G2 的三相回路测点进行比较"
+            self.meter_status = "protect"
+            self.meter_color = "black"
+            self.meter_reading = "Err / 输入保护"
+            return
+
+        if sim.grounding_mode != "断开":
+            self.meter_status = "ok"
+            self.meter_color = "black"
+            self.meter_reading = "≈0Ω / 蜂鸣"
+            return
+
+        loop_ready = (
+            sim.gen1.breaker_position == BreakerPosition.TEST
+            and sim.gen2.breaker_position == BreakerPosition.TEST
+            and sim.gen1.breaker_closed
+            and sim.gen2.breaker_closed
+        )
+        if not loop_ready:
+            self.meter_status = "open"
+            self.meter_color = "black"
+            self.meter_reading = "OL / 无蜂鸣"
+            return
+
+        if info1[2] == info2[2]:
+            self.meter_status = "not_connected"
+            self.meter_color = "black"
+            self.meter_reading = "----"
+            return
+
+        phase1 = self._phase_resolver.resolve_loop_node_phase(n1)
+        phase2 = self._phase_resolver.resolve_loop_node_phase(n2)
+        fc = sim.fault_config
+        nominal_match = info1[3] == info2[3]
+        actual_match = phase1 == phase2
+        expected_result = nominal_match == actual_match
+        point = f'{info1[3]}{info2[3]}'
+
+        if actual_match:
+            self.meter_status = "ok"
+            self.meter_color = "black"
+            self.meter_reading = "≈0Ω / 蜂鸣"
         else:
-            phase1 = self._phase_resolver.resolve_loop_node_phase(n1)
-            phase2 = self._phase_resolver.resolve_loop_node_phase(n2)
-            self.meter_nodes = (n1, n2)
-            fc = sim.fault_config
-            nominal_match = info1[3] == info2[3]
-            actual_match = phase1 == phase2
-            expected_result = nominal_match == actual_match
-            point = f'{info1[3]}{info2[3]}'
-            if actual_match:
-                self.meter_status = "ok"
-                self.meter_color = "green" if expected_result else "red"
-                suffix = "" if expected_result else "（异相异常导通）"
-                self.meter_reading = f"通路 [≈0Ω / 蜂鸣] — {info1[4]} ↔ {info2[4]} 导通{suffix}"
-            else:
-                self.meter_status = "danger"
-                self.meter_color = "green" if expected_result else "red"
-                hint = "（异相隔离正常）" if expected_result else "（检测到接线异常）"
-                if self._flow_mgr.should_show_diagnostic_hints():
-                    hint = (
-                        "（异相隔离正常）" if expected_result
-                        else f"（疑似接线错误，请检查 {info2[4].split()[0]} 侧接线）"
-                    )
-                self.meter_reading = (
-                    f"断路 [∞Ω / 无蜂鸣] — {info1[4]} ↔ {info2[4]} 不通"
-                    f"{hint}"
-                )
-            if (not expected_result
-                    and fc.active and not fc.repaired
-                    and (fc.scenario_id in ('E01', 'E02')
-                         or fc.params.get('g1_loop_swap')
-                         or fc.params.get('g2_loop_swap'))):
-                self._mark_fault_detected(
-                    step=1,
-                    source='loop_measurement',
-                    target='loop',
-                    point=point,
-                )
+            self.meter_status = "open"
+            self.meter_color = "black"
+            self.meter_reading = "OL / 无蜂鸣"
+
+        if (not expected_result
+                and fc.active and not fc.repaired
+                and (fc.scenario_id in ('E01', 'E02')
+                     or fc.params.get('g1_loop_swap')
+                     or fc.params.get('g2_loop_swap'))):
+            self._mark_fault_detected(
+                step=1,
+                source='loop_measurement',
+                target='loop',
+                point=point,
+            )
 
     def _handle_intra_pt_measurement(self, sim, n1, n2, info1, info2, pt_name, ph1, ph2) -> None:
         _sim_r = self._sim_state
@@ -229,16 +238,10 @@ class MeasurementMixin:
                     point=f'{ph1}{ph2}',
                 )
 
-        warn_icon = (" ⚠️" if self.meter_status == 'danger'
-                     and fc.active and not fc.repaired
-                     and fc.scenario_id in ('E03', 'E04')
-                     and pt_name == 'PT3' else "")
         self.meter_reading = (
             f"线电压: {info1[4]} ↔ {info2[4]} | "
             f"一次侧={primary_display/1000:.2f} kV"
             f"（二次侧={meter_v:.1f} V）"
-            + ("  [正常]" if self.meter_status == "ok" else
-               f"  [异常]{warn_icon}" if self.meter_status == "danger" else "  [无电压]")
         )
 
     def _handle_cross_pt_measurement(self, sim, n1, n2) -> None:
@@ -301,14 +304,9 @@ class MeasurementMixin:
         self.meter_nodes = (n1, n2)
         self.meter_color = "green"
         self.meter_status = "ok"
-        warn = (" ⚠️" if fc.active and not fc.repaired
-                and fc.scenario_id in ('E03', 'E04')
-                and gen_pt_name == 'PT3'
-                and meter_v > (5.0 if is_same_phase else 200.0) else "")
-        same_tag = "同相" if is_same_phase else "跨相"
         self.meter_reading = (
-            f"{gen_pt_name}_{gen_term} ↔ PT2_{bus_phase} | {same_tag}{warn}"
-            f" | 机组相电压={gen_ph:.2f} V  母排相电压={bus_ph:.2f} V"
+            f"{gen_pt_name}_{gen_term} ↔ PT2_{bus_phase} | "
+            f"机组相电压={gen_ph:.2f} V  母排相电压={bus_ph:.2f} V"
             f"  压差={meter_v:.2f} V"
         )
 
@@ -334,8 +332,10 @@ class MeasurementMixin:
                 if n1 not in ui_nodes or n2 not in ui_nodes:
                     self.meter_status = "invalid"
                     self.meter_color = "red"
-                    self.meter_reading = "测量无效: 探针未连接到合法测点"
+                    self.meter_nodes = (n1, n2)
+                    self.meter_reading = "----"
                     return
+                self.meter_nodes = (n1, n2)
                 info1, info2 = ui_nodes[n1], ui_nodes[n2]
                 loop_pair = info1[2].startswith('Loop') and info2[2].startswith('Loop')
                 valid_pairs = {
@@ -361,18 +361,18 @@ class MeasurementMixin:
                     self._handle_cross_pt_measurement(sim, n1, n2)
                 else:
                     self.meter_status = "invalid"
-                    self.meter_reading = "测量无效: PT压差请测 PT 二次端子；回路演示请测 G1/G2 三相回路测点"
+                    self.meter_reading = "----"
             elif n1:
                 if n1 in ui_nodes:
                     self.meter_status = "waiting"
-                    self.meter_reading = f"已连接 {ui_nodes[n1][4]}, 等待放置黑表笔..."
+                    self.meter_reading = "----"
                 else:
                     self.meter_status = "invalid"
                     self.meter_color = "red"
-                    self.meter_reading = "测量无效: 探针未连接到合法测点"
+                    self.meter_reading = "----"
             else:
                 self.meter_status = "waiting"
-                self.meter_reading = "请用鼠标点击 PT 二次端子或 G1/G2 三相回路测点进行测量"
+                self.meter_reading = "----"
         else:
             sim.probe1_node = None
             sim.probe2_node = None

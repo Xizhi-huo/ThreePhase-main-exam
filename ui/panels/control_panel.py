@@ -71,6 +71,7 @@ class WidgetBuilderMixin:
             on_show_blackbox=self._show_free_exam_blackbox,
             on_enable_phase_seq_meter=self._enable_free_exam_phase_seq_meter,
             on_disable_phase_seq_meter=self._disable_free_exam_phase_seq_meter,
+            on_pt_ratio_changed=self._on_pt_ratio_changed,
         )
         param_page = ParamControlsPage(
             sim_state=ctrl.sim_state,
@@ -148,12 +149,13 @@ class WidgetBuilderMixin:
 
     def _on_reset_free_exam(self) -> None:
         self.ctrl.reset_free_exam()
+        self._run_controls_page.reset_measurement_tool_state()
         self.sync_runtime_controls_from_state()
         self._update_free_exam_panel()
 
     def _on_free_exam_record_measurement(self) -> None:
         if not self.ctrl.record_free_exam_measurement():
-            self.show_warning("尚未开始考核", "请先点击【开始随机考核】。")
+            self.show_warning("尚未开始考核", "当前未处于考核进行状态。")
         self._update_free_exam_panel()
 
     def _enable_free_exam_phase_seq_meter(self) -> None:
@@ -162,9 +164,13 @@ class WidgetBuilderMixin:
     def _disable_free_exam_phase_seq_meter(self) -> None:
         self.disconnect_phase_seq_meter()
 
+    def _on_pt_ratio_changed(self, ratio_attr: str, primary_value: int, secondary_value: int) -> None:
+        self.ctrl.update_pt_ratio(ratio_attr, primary_value, secondary_value)
+        self._update_free_exam_panel()
+
     def _show_free_exam_blackbox(self, target: str) -> None:
         if not self.ctrl.is_free_exam_active():
-            self.show_warning("尚未开始考核", "请先点击【开始随机考核】。")
+            self.show_warning("尚未开始考核", "当前未处于考核进行状态。")
             return
         show_blackbox_dialog(self, api=self.ctrl, step=0, target=target)
         self._update_free_exam_panel()
@@ -173,6 +179,56 @@ class WidgetBuilderMixin:
         page = getattr(self, "_run_controls_page", None)
         if page is not None:
             page.refresh_free_exam_panel(getattr(self.ctrl, "free_exam_state", None))
+
+    @staticmethod
+    def _point_segment_distance(px: float, py: float, ax: float, ay: float, bx: float, by: float) -> float:
+        dx = bx - ax
+        dy = by - ay
+        length_sq = dx * dx + dy * dy
+        if length_sq <= 1e-12:
+            return ((px - ax) ** 2 + (py - ay) ** 2) ** 0.5
+        t = ((px - ax) * dx + (py - ay) * dy) / length_sq
+        t = max(0.0, min(1.0, t))
+        cx = ax + t * dx
+        cy = ay + t * dy
+        return ((px - cx) ** 2 + (py - cy) ** 2) ** 0.5
+
+    def _find_primary_voltage_contact_node(self, x: float, y: float) -> str | None:
+        point_threshold = 0.060
+        segment_threshold = 0.018
+        best_node = None
+        best_dist = point_threshold
+
+        for node_name, data in NODES.items():
+            if not node_name.startswith("PRI_PT"):
+                continue
+            dist = ((x - data[0]) ** 2 + (y - data[1]) ** 2) ** 0.5
+            if dist < best_dist:
+                best_node = node_name
+                best_dist = dist
+
+        pt_cy = {"PT1": 0.355, "PT2": 0.205, "PT3": 0.355}
+        h = 0.168
+        for pt_name, cy in pt_cy.items():
+            lower_bus_y = cy - h * 0.13
+            bottom_y = cy - h * 0.46
+            for phase in ("A", "B", "C"):
+                primary_node = f"PRI_{pt_name}_{phase}"
+                secondary_node = f"{pt_name}_{phase}"
+                if primary_node not in NODES or secondary_node not in NODES:
+                    continue
+                sx, sy = NODES[primary_node][:2]
+                tx = NODES[secondary_node][0]
+                segments = (
+                    (tx, lower_bus_y, tx, bottom_y),
+                    (tx, bottom_y, tx, sy),
+                    (tx, sy, sx, sy),
+                )
+                for ax, ay, bx, by in segments:
+                    if self._point_segment_distance(x, y, ax, ay, bx, by) <= segment_threshold:
+                        return primary_node
+
+        return best_node
 
     def _on_circuit_click(self, event) -> None:
         if self._circuit_tab.get_phase_wiring_status() != PhaseWiringStatus.IDLE:
@@ -184,6 +240,15 @@ class WidgetBuilderMixin:
         if event.inaxes != self.ax_circuit or event.xdata is None or event.ydata is None:
             return
 
+        primary_contact_node = self._find_primary_voltage_contact_node(event.xdata, event.ydata)
+        if primary_contact_node:
+            accident_message = self.ctrl.handle_primary_probe_contact(primary_contact_node)
+            if accident_message:
+                self.show_warning("一次侧带电接触", accident_message)
+                self.sync_runtime_controls_from_state()
+                self._update_free_exam_panel()
+                return
+
         closest_node = None
         min_dist = 0.04
         for name, data in NODES.items():
@@ -193,6 +258,13 @@ class WidgetBuilderMixin:
                 min_dist = dist
 
         if closest_node:
+            accident_message = self.ctrl.handle_primary_probe_contact(closest_node)
+            if accident_message:
+                self.show_warning("一次侧带电接触", accident_message)
+                self.sync_runtime_controls_from_state()
+                self._update_free_exam_panel()
+                return
+
             sim = self.ctrl.sim_state
             if sim.probe1_node is None:
                 sim.probe1_node = closest_node

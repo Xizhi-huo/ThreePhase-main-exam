@@ -18,4 +18,14 @@ NODES = {
     'PT3_A': (0.873, 0.535, 'Gen2', 'A', 'PT3二次A'),
     'PT3_B': (0.900, 0.535, 'Gen2', 'B', 'PT3二次B'),
     'PT3_C': (0.927, 0.535, 'Gen2', 'C', 'PT3二次C'),
+    # 一次侧高压可点击点：位置对应拓扑图中 PT 一次侧接入点的小黑点。
+    'PRI_PT1_A': (0.240, 0.255, 'PrimaryPT1', 'A', 'PT1一次A'),
+    'PRI_PT1_B': (0.280, 0.240, 'PrimaryPT1', 'B', 'PT1一次B'),
+    'PRI_PT1_C': (0.320, 0.225, 'PrimaryPT1', 'C', 'PT1一次C'),
+    'PRI_PT2_A': (0.473, 0.115, 'PrimaryPT2', 'A', 'PT2一次A'),
+    'PRI_PT2_B': (0.500, 0.090, 'PrimaryPT2', 'B', 'PT2一次B'),
+    'PRI_PT2_C': (0.527, 0.065, 'PrimaryPT2', 'C', 'PT2一次C'),
+    'PRI_PT3_A': (0.680, 0.255, 'PrimaryPT3', 'A', 'PT3一次A'),
+    'PRI_PT3_B': (0.720, 0.240, 'PrimaryPT3', 'B', 'PT3一次B'),
+    'PRI_PT3_C': (0.760, 0.225, 'PrimaryPT3', 'C', 'PT3一次C'),
 }

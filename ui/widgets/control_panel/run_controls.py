@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from collections import OrderedDict
 
-from PyQt5 import QtCore, QtWidgets
+from PyQt5 import QtCore, QtGui, QtWidgets
 
+from domain.constants import DEFAULT_PT_RATIO_ROWS
 from domain.enums import AVAILABLE_MODES
 from domain.node_map import NODES
 from ui.widgets.control_panel._widget_tokens import (
@@ -12,6 +13,34 @@ from ui.widgets.control_panel._widget_tokens import (
     apply_toggle_tone,
     set_props,
 )
+
+
+class TriangleSpinBox(QtWidgets.QSpinBox):
+    """QSpinBox with explicitly painted up/down triangles for themed UIs."""
+
+    def paintEvent(self, event) -> None:
+        super().paintEvent(event)
+        option = QtWidgets.QStyleOptionSpinBox()
+        self.initStyleOption(option)
+        style = self.style()
+        painter = QtGui.QPainter(self)
+        painter.setRenderHint(QtGui.QPainter.Antialiasing)
+        painter.setPen(QtCore.Qt.NoPen)
+        painter.setBrush(QtGui.QColor("#475569" if self.isEnabled() else "#cbd5e1"))
+        for sub_control, points in (
+            (QtWidgets.QStyle.SC_SpinBoxUp, ((0, -3), (-4, 3), (4, 3))),
+            (QtWidgets.QStyle.SC_SpinBoxDown, ((0, 3), (-4, -3), (4, -3))),
+        ):
+            rect = style.subControlRect(QtWidgets.QStyle.CC_SpinBox, option, sub_control, self)
+            if not rect.isValid():
+                continue
+            center = rect.center()
+            polygon = QtGui.QPolygon([
+                QtCore.QPoint(center.x() + dx, center.y() + dy)
+                for dx, dy in points
+            ])
+            painter.drawPolygon(polygon)
+        painter.end()
 
 
 class RunControlsPage(QtWidgets.QWidget):
@@ -25,6 +54,7 @@ class RunControlsPage(QtWidgets.QWidget):
         on_show_blackbox,
         on_enable_phase_seq_meter,
         on_disable_phase_seq_meter,
+        on_pt_ratio_changed,
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -35,6 +65,7 @@ class RunControlsPage(QtWidgets.QWidget):
         self.on_show_blackbox_cb = on_show_blackbox
         self.on_enable_phase_seq_meter_cb = on_enable_phase_seq_meter
         self.on_disable_phase_seq_meter_cb = on_disable_phase_seq_meter
+        self.on_pt_ratio_changed_cb = on_pt_ratio_changed
         self._active_phase_seq_pt = None
         self._measurement_log_expanded = False
         self._last_record_count = 0
@@ -42,6 +73,8 @@ class RunControlsPage(QtWidgets.QWidget):
         self._measurement_records = []
         self._measurement_filter = "全部"
         self._measurement_filter_buttons = {}
+        self._pt_ratio_inputs = {}
+        self._pt_ratio_value_labels = {}
         self._build()
 
     def _build(self) -> None:
@@ -77,7 +110,7 @@ class RunControlsPage(QtWidgets.QWidget):
         self.fp_btn_random.clicked.connect(self.on_start_free_exam_cb)
         start_layout.addWidget(self.fp_btn_random)
 
-        self.fp_status_lbl = QtWidgets.QLabel("未开始：点击随机故障开始考核。")
+        self.fp_status_lbl = QtWidgets.QLabel("未开始：等待随机故障启动。")
         self.fp_status_lbl.setWordWrap(True)
         set_props(self.fp_status_lbl, mutedText=True, badge=True, tone="warning")
         start_layout.addWidget(self.fp_status_lbl)
@@ -197,6 +230,9 @@ class RunControlsPage(QtWidgets.QWidget):
         self.show_gen_wires_cb.toggled.connect(lambda value: setattr(self.sim_state, "show_gen_wires", value))
         layout.addWidget(self.show_gen_wires_cb)
 
+        self.pt_ratio_group = self._build_pt_ratio_group()
+        layout.addWidget(self.pt_ratio_group)
+
         self._generator_layout = QtWidgets.QVBoxLayout()
         self._generator_layout.setContentsMargins(0, 0, 0, 0)
         self._generator_layout.setSpacing(8)
@@ -207,24 +243,190 @@ class RunControlsPage(QtWidgets.QWidget):
     def add_generator_card(self, card) -> None:
         self._generator_layout.addWidget(card)
 
+    _PT_RATIO_ROWS = (
+        ("PT1", "pt_gen_ratio"),
+        ("PT2", "pt_bus_ratio"),
+        ("PT3", "pt3_ratio"),
+    )
+
+    def _build_pt_ratio_group(self) -> QtWidgets.QGroupBox:
+        group = QtWidgets.QGroupBox("PT 变比")
+        layout = QtWidgets.QVBoxLayout(group)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(4)
+
+        header = self._build_pt_ratio_row_header()
+        layout.addWidget(header)
+
+        for label, ratio_attr in self._PT_RATIO_ROWS:
+            row_widget = QtWidgets.QWidget()
+            row = QtWidgets.QHBoxLayout(row_widget)
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(25)
+
+            name_lbl = QtWidgets.QLabel(label)
+            name_lbl.setFixedWidth(34)
+            name_lbl.setStyleSheet("font-size:12px; font-weight:800;")
+
+            primary_spin = self._make_pt_ratio_spinbox(1, 50000, 100, 86)
+            colon_lbl = QtWidgets.QLabel(":")
+            colon_lbl.setFixedWidth(80)
+            colon_lbl.setAlignment(QtCore.Qt.AlignCenter)
+            colon_lbl.setStyleSheet("font-size:13px; font-weight:800; color:#334155;")
+            secondary_spin = self._make_pt_ratio_spinbox(1, 9999, 1, 88)
+
+            ratio_lbl = QtWidgets.QLabel()
+            ratio_lbl.setFixedWidth(58)
+            ratio_lbl.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+            ratio_lbl.setStyleSheet("font-size:11px; color:#64748b; font-weight:700;")
+
+            primary_value, secondary_value = DEFAULT_PT_RATIO_ROWS[ratio_attr]
+            primary_spin.setValue(primary_value)
+            secondary_spin.setValue(secondary_value)
+            primary_spin.valueChanged.connect(
+                lambda value, attr=ratio_attr: self._on_pt_ratio_row_changed(attr)
+            )
+            secondary_spin.valueChanged.connect(
+                lambda value, attr=ratio_attr: self._on_pt_ratio_row_changed(attr)
+            )
+
+            self._pt_ratio_inputs[ratio_attr] = (primary_spin, secondary_spin)
+            self._pt_ratio_value_labels[ratio_attr] = ratio_lbl
+            self._refresh_pt_ratio_label(ratio_attr)
+
+            row.addWidget(name_lbl)
+            row.addWidget(primary_spin)
+            row.addWidget(colon_lbl)
+            row.addWidget(secondary_spin)
+            row.addWidget(ratio_lbl)
+            row.addStretch(1)
+            layout.addWidget(row_widget)
+
+        return group
+
+    def _build_pt_ratio_row_header(self) -> QtWidgets.QWidget:
+        header = QtWidgets.QWidget()
+        row = QtWidgets.QHBoxLayout(header)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(5)
+        for text, width in (("", 34), ("一次侧", 86), ("", 10), ("二次侧", 68), ("倍率", 58)):
+            label = QtWidgets.QLabel(text)
+            label.setFixedWidth(width)
+            label.setAlignment(QtCore.Qt.AlignCenter)
+            label.setStyleSheet("font-size:11px; color:#64748b; font-weight:700;")
+            row.addWidget(label)
+        row.addStretch(1)
+        return header
+
+    def _make_pt_ratio_spinbox(self, vmin: int, vmax: int, step: int, width: int) -> TriangleSpinBox:
+        spinbox = TriangleSpinBox()
+        spinbox.setRange(vmin, vmax)
+        spinbox.setSingleStep(step)
+        spinbox.setFixedWidth(width)
+        spinbox.setFixedHeight(28)
+        spinbox.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.UpDownArrows)
+        spinbox.setProperty("compactInput", True)
+        spinbox.setProperty("ptRatioInput", True)
+        spinbox.setStyleSheet("""
+            QSpinBox[ptRatioInput="true"] {
+                padding: 3px 18px 3px 7px;
+                border-radius: 7px;
+                font-size: 12px;
+                font-weight: 700;
+            }
+            QSpinBox[ptRatioInput="true"]::up-button,
+            QSpinBox[ptRatioInput="true"]::down-button {
+                width: 16px;
+                background: #f8fafc;
+                border-left: 1px solid #cbd5e1;
+            }
+            QSpinBox[ptRatioInput="true"]::up-button {
+                subcontrol-origin: border;
+                subcontrol-position: top right;
+                border-top-right-radius: 7px;
+                border-bottom: 1px solid #dbe4ee;
+            }
+            QSpinBox[ptRatioInput="true"]::down-button {
+                subcontrol-origin: border;
+                subcontrol-position: bottom right;
+                border-bottom-right-radius: 7px;
+            }
+            QSpinBox[ptRatioInput="true"]::up-arrow,
+            QSpinBox[ptRatioInput="true"]::down-arrow {
+                image: none;
+                width: 0px;
+                height: 0px;
+            }
+        """)
+        return spinbox
+
+    def apply_pt_ratio_row_updates(self, updates) -> None:
+        for ratio_attr, row_values in dict(updates or {}).items():
+            try:
+                primary_value, secondary_value = row_values
+            except (TypeError, ValueError):
+                continue
+            self._set_pt_ratio_row(ratio_attr, primary_value, secondary_value)
+
+    def sync_pt_ratio_rows_from_state(self) -> None:
+        for ratio_attr in self._pt_ratio_inputs:
+            ratio = float(getattr(self.sim_state, ratio_attr, 0.0) or 0.0)
+            if ratio <= 0:
+                continue
+            default_primary, _ = DEFAULT_PT_RATIO_ROWS[ratio_attr]
+            inferred_secondary = max(1, int(round(default_primary / ratio)))
+            self._set_pt_ratio_row(ratio_attr, default_primary, inferred_secondary)
+
+    def _set_pt_ratio_row(self, ratio_attr: str, primary_value: int, secondary_value: int) -> None:
+        inputs = self._pt_ratio_inputs.get(ratio_attr)
+        if inputs is None:
+            return
+        primary_spin, secondary_spin = inputs
+        primary_spin.blockSignals(True)
+        secondary_spin.blockSignals(True)
+        primary_spin.setValue(max(1, int(primary_value)))
+        secondary_spin.setValue(max(1, int(secondary_value)))
+        primary_spin.blockSignals(False)
+        secondary_spin.blockSignals(False)
+        self._refresh_pt_ratio_label(ratio_attr)
+
+    def _refresh_pt_ratio_label(self, ratio_attr: str) -> None:
+        inputs = self._pt_ratio_inputs.get(ratio_attr)
+        label = self._pt_ratio_value_labels.get(ratio_attr)
+        if inputs is None or label is None:
+            return
+        primary_spin, secondary_spin = inputs
+        ratio = primary_spin.value() / max(1, secondary_spin.value())
+        label.setText(f"{ratio:.2f}")
+
+    def _on_pt_ratio_row_changed(self, ratio_attr: str) -> None:
+        inputs = self._pt_ratio_inputs.get(ratio_attr)
+        if inputs is None:
+            return
+        primary_spin, secondary_spin = inputs
+        primary_value = primary_spin.value()
+        secondary_value = secondary_spin.value()
+        setattr(self.sim_state, ratio_attr, primary_value / secondary_value)
+        self._refresh_pt_ratio_label(ratio_attr)
+        self.on_pt_ratio_changed_cb(ratio_attr, primary_value, secondary_value)
+
     def refresh_free_exam_panel(self, state) -> None:
         result = getattr(state, "result", "idle") if state is not None else "idle"
         active = bool(getattr(state, "active", False)) if state is not None else False
         attempted = bool(getattr(state, "final_close_attempted", False)) if state is not None else False
-        fail_reason = getattr(state, "fail_reason", "") if state is not None else ""
         records = list(getattr(state, "measurement_records", [])) if state is not None else []
 
         if result == "passed":
             text, tone = "通过：Gen2 已成功并入母排。", "success"
         elif result == "failed":
-            reason = f"\n原因：{fail_reason}" if fail_reason else ""
-            text, tone = f"未通过：最终 Gen2 并母未成功。{reason}", "danger"
+            text, tone = "未通过：最终 Gen2 并母未成功。", "danger"
         elif result == "pending":
             text, tone = "已提交最终合闸，正在根据母排并入状态判定。", "warning"
         elif active:
-            text, tone = "考核进行中：随机故障已隐藏注入，完成排查后使用 Gen2 普通合闸按钮并母。", "info"
+            text, tone = "考核进行中：随机故障已隐藏注入。", "info"
         else:
-            text, tone = "未开始：点击随机故障开始考核。", "warning"
+            text, tone = "未开始：等待随机故障启动。", "warning"
 
         self.fp_status_lbl.setText(text)
         apply_badge_tone(self.fp_status_lbl, tone)
@@ -235,6 +437,10 @@ class RunControlsPage(QtWidgets.QWidget):
             button.setEnabled(active and result in {"running", "pending"})
 
         self._refresh_measurement_log(records)
+
+    def reset_measurement_tool_state(self) -> None:
+        self._put_away_phase_seq_meter()
+        self._put_away_multimeter()
 
     def _on_phase_seq_meter_toggled(self, checked) -> None:
         if checked:
@@ -452,47 +658,61 @@ class RunControlsPage(QtWidgets.QWidget):
         if record.get("kind") == "phase_sequence":
             sequence = str(record.get("phase_sequence") or record.get("value") or "unknown")
             reading = str(record.get("reading") or "").strip()
-            if sequence and sequence != "unknown":
+            if sequence and sequence not in {"unknown", "FAULT"}:
                 return f"{sequence}（{self._phase_sequence_label(sequence)}）"
-            return self._compact_reading(reading) or "接线未完成"
+            return self._compact_reading(reading) or "----"
 
         value = record.get("value")
-        if isinstance(value, (int, float)):
+        nodes = list(record.get("nodes") or [])
+        is_loop = len(nodes) == 2 and all(str(node).startswith("LOOP_") for node in nodes)
+        if isinstance(value, (int, float)) and not is_loop:
+            pt_name = self._record_intra_pt_name(nodes)
+            if pt_name is not None:
+                primary_value = value * self._pt_ratio_for_name(pt_name)
+                return f"{value:.2f}V/{primary_value:.2f}V"
             return f"{value:.2f} V"
+
         reading = str(record.get("reading") or "--")
-        for token in ("  [正常]", "  [异常]", "  [无电压]", " [正常]", " [异常]", " [无电压]"):
-            reading = reading.replace(token, "")
-        return self._compact_reading(reading.replace("⚠️", "").replace("⚠", "").strip())
+        return self._compact_reading(reading)
+
+    @staticmethod
+    def _record_intra_pt_name(nodes) -> str | None:
+        if len(nodes) != 2:
+            return None
+        pt_names = []
+        phases = []
+        for node in nodes:
+            parts = str(node).rsplit("_", 1)
+            if len(parts) != 2:
+                return None
+            pt_name, phase = parts
+            pt_names.append(pt_name)
+            phases.append(phase)
+        if pt_names[0] == pt_names[1] and pt_names[0] in {"PT1", "PT2", "PT3"} and phases[0] != phases[1]:
+            return pt_names[0]
+        return None
+
+    def _pt_ratio_for_name(self, pt_name: str) -> float:
+        ratio_attr = {
+            "PT1": "pt_gen_ratio",
+            "PT2": "pt_bus_ratio",
+            "PT3": "pt3_ratio",
+        }.get(pt_name)
+        if ratio_attr is None:
+            return 1.0
+        return float(getattr(self.sim_state, ratio_attr, 1.0) or 1.0)
 
     @staticmethod
     def _compact_reading(reading: str) -> str:
-        text = str(reading or "--").strip()
-        if "接线未完成" in text and "已接" in text:
-            return text.split("：", 1)[-1].strip()
-        if "万用表未开启" in text:
-            return "万用表未开启"
-        if "测量无效" in text:
-            return "测量无效"
-        if "等待" in text:
-            return "等待表笔"
-        if "通路" in text or "导通" in text:
-            return "通路"
-        if "不通" in text or "开路" in text:
-            return "不通"
-        if "危险" in text:
-            return "危险"
-        if len(text) > 18:
-            return text[:18] + "..."
-        return text
+        text = str(reading or "--").replace("⚠️", "").replace("⚠", "").strip()
+        return text or "--"
 
     @staticmethod
     def _phase_sequence_label(sequence: str) -> str:
         if sequence in {"ABC", "BCA", "CAB"}:
             return "正序"
-        if sequence == "FAULT":
-            return "不平衡/故障"
-        if sequence == "unknown":
-            return "未知"
+        if sequence in {"FAULT", "unknown"}:
+            return "----"
         return "反序"
 
     def _on_mode_changed(self, value, checked) -> None:

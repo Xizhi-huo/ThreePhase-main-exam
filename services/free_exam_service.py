@@ -60,7 +60,7 @@ class FreeExamService:
             record = {
                 "no": state.next_record_no,
                 "kind": "multimeter",
-                "nodes": getattr(self._physics, "meter_nodes", None),
+                "nodes": self._current_multimeter_nodes(),
                 "reading": getattr(self._physics, "meter_reading", "--"),
                 "value": getattr(self._physics, "meter_voltage", None),
                 "status": getattr(self._physics, "meter_status", "idle"),
@@ -69,6 +69,16 @@ class FreeExamService:
         state.next_record_no += 1
         self._last_record_perf = now
         return True
+
+    def _current_multimeter_nodes(self):
+        nodes = getattr(self._physics, "meter_nodes", None)
+        if nodes:
+            return nodes
+        probe1 = getattr(self._sim_state, "probe1_node", None)
+        probe2 = getattr(self._sim_state, "probe2_node", None)
+        if probe1 and probe2:
+            return (probe1, probe2)
+        return nodes
 
     def on_gen2_final_close_attempt(self) -> bool:
         state = self._get_state()
@@ -135,6 +145,16 @@ class FreeExamService:
             self._fail("Gen2 合闸后未形成双机并母运行")
         else:
             self._fail("Gen2 最终并母状态未满足通过条件")
+
+    def register_safety_accident(self, reason: str) -> bool:
+        state = self._get_state()
+        if not state.active or state.result in {"passed", "failed"}:
+            return False
+        state.final_close_attempted = True
+        state.final_close_wait_frames = 0
+        state.sustained_pass_frames = 0
+        self._fail(reason)
+        return True
 
     def _fail(self, reason: str) -> None:
         state = self._get_state()

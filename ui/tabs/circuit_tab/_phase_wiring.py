@@ -117,11 +117,11 @@ class PhaseWiringMixin:
         self._place_phase_seq_meter()
 
         if seq in {"ABC", "BCA", "CAB"}:
-            color, label = "#2ecc71", "正序"
+            color, label = "#e5e7eb", "正序"
         elif seq == "FAULT":
-            color, label = "#f39c12", "不平衡/故障"
+            color, label = "#e5e7eb", "----"
         else:
-            color, label = "#e74c3c", "反序"
+            color, label = "#e5e7eb", "反序"
 
         self._psm_result_lbl.setText(f"{pt_name} -> {label}")
         self._psm_result_lbl.setStyleSheet(
