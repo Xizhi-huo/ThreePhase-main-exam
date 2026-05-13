@@ -31,31 +31,37 @@ PRIMARY_CONTACT_ACCIDENTS = (
         "万用表绝缘击穿",
         "普通表笔接触带电一次侧，高压击穿表笔绝缘并损坏仪表。",
         "小伙汁，万用表替你扛了一下，但现场它不一定扛得住。",
+        "一次侧-1.png",
     ),
     (
         "弧光闪络",
         "一次侧高压点发生弧光闪络，柜内保护动作，操作中止。",
         "小伙汁，这一下在屏幕里只是弹窗，现场就是弧光和冲击波了。",
+        "一次侧-2.png",
     ),
     (
         "相间短路",
         "表笔跨越高压相间距离，引发相间短路和开关柜跳闸。",
         "小伙汁，三相不是这么“握手”的，现场这一碰可能直接炸柜。",
+        "一次侧-3.png",
     ),
     (
         "对地放电",
         "高压侧经表笔形成对地放电路径，接地保护动作。",
         "小伙汁，电流已经给自己找路了，现场你可能也在路上。",
+        "一次侧-4.png",
     ),
     (
         "表笔熔毁",
         "测试线绝缘和金属端部过热熔毁，仪表端口损坏。",
         "小伙汁，表笔先融了算你运气好，现场下一步可能就轮到人了。",
+        "一次侧-5.png",
     ),
     (
         "人身触电风险",
         "带电一次侧接触形成严重人身触电风险，安全闭锁动作。",
         "小伙汁，在这里我能救你一命，现场就没这么好运了。",
+        "一次侧-6.png",
     ),
 )
 
@@ -304,8 +310,11 @@ class PowerSyncController:
         if not self._is_primary_voltage_node_live(node_name):
             return None
 
-        title, consequence, caption = random.choice(PRIMARY_CONTACT_ACCIDENTS)
-        message = f"风险：{title}\n\n后果：{consequence}\n\n{caption}\n\n本次考核终止。"
+        title, consequence, caption, image = random.choice(PRIMARY_CONTACT_ACCIDENTS)
+        message = (
+            f"风险：{title}\n\n后果：{consequence}\n\n{caption}"
+            f"\n\n本次考核终止。\n\n[image:{image}]"
+        )
         if not self.free_exam_svc.register_safety_accident(message):
             return None
 

@@ -10,7 +10,7 @@ from ui.tabs.circuit_tab import CircuitTab
 from ui.tabs.waveform_tab import WaveformTab
 
 
-ACCIDENT_IMAGE_PATH = Path(__file__).resolve().parents[1] / "image" / "Screenshot.png"
+ACCIDENT_IMAGE_DIR = Path(__file__).resolve().parents[1] / "image"
 ACCIDENT_WARNING_TITLE = "\u4e00\u6b21\u4fa7\u5e26\u7535\u63a5\u89e6"
 
 
@@ -180,16 +180,19 @@ class PowerSyncUI(WidgetBuilderMixin, QtWidgets.QMainWindow):
     def _strip_accident_prefix(text: str, prefix: str) -> str:
         return text[len(prefix):].strip() if text.startswith(prefix) else text.strip()
 
-    def _parse_accident_message(self, message: str) -> tuple[str, str, str, str]:
+    def _parse_accident_message(self, message: str) -> tuple[str, str, str, str, str]:
         parts = [part.strip() for part in message.split("\n\n") if part.strip()]
+        image_name = ""
+        if parts and parts[-1].startswith("[image:") and parts[-1].endswith("]"):
+            image_name = parts.pop()[len("[image:"):-1].strip()
         risk = self._strip_accident_prefix(parts[0], "风险：") if parts else ACCIDENT_WARNING_TITLE
         consequence = self._strip_accident_prefix(parts[1], "后果：") if len(parts) > 1 else message
         caption = parts[2] if len(parts) > 2 else ""
         ending = parts[3] if len(parts) > 3 else "本次考核终止。"
-        return risk, consequence, caption, ending
+        return risk, consequence, caption, ending, image_name
 
     def _show_accident_warning(self, title: str, message: str) -> None:
-        risk, consequence, caption, ending = self._parse_accident_message(message)
+        risk, consequence, caption, ending, image_name = self._parse_accident_message(message)
 
         dialog = QtWidgets.QDialog(self)
         dialog.setWindowTitle(title)
@@ -278,8 +281,9 @@ class PowerSyncUI(WidgetBuilderMixin, QtWidgets.QMainWindow):
             caption_layout.addWidget(caption_lbl)
             layout.addWidget(caption_panel)
 
-        if ACCIDENT_IMAGE_PATH.exists():
-            pixmap = QtGui.QPixmap(str(ACCIDENT_IMAGE_PATH))
+        image_path = ACCIDENT_IMAGE_DIR / image_name if image_name else None
+        if image_path is not None and image_path.exists():
+            pixmap = QtGui.QPixmap(str(image_path))
             if not pixmap.isNull():
                 image_frame = QtWidgets.QFrame()
                 image_frame.setStyleSheet(
