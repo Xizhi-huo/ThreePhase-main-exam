@@ -10,8 +10,6 @@ import numpy as np
 from domain.constants import (
     TRIP_CURRENT,
     CT_RATIO,
-    GRID_FREQ,
-    GRID_AMP,
     SYNC_FREQ_OK_HZ,
     SYNC_VOLT_OK_V,
     SYNC_PHASE_OK_DEG,
@@ -88,7 +86,6 @@ class ProtectionMixin:
             self.relay_msg, self.relay_color = "💥 保护: Gen 1 环流过大，跳闸！", "red"
         if self.i2_rms > TRIP_CURRENT:
             sim.gen2.breaker_closed = False
-            sim.auto_sync_active = False
             self.flash_frames2 = 0
             self.relay_msg, self.relay_color = "💥 保护: Gen 2 环流过大，跳闸！", "red"
         return {'delta1': delta1, 'delta2': delta2}
@@ -152,13 +149,6 @@ class ProtectionMixin:
         if generator.mode == "stop":
             generator.breaker_closed = False
             generator.cmd_close = False
-        elif generator.mode == "auto":
-            if is_isolated and not self.bus_live:
-                if (abs(generator.freq - GRID_FREQ) < 0.1 and
-                        abs(GRID_AMP - a_value) <= 185.0 and
-                        not generator.breaker_closed):
-                    generator.breaker_closed = True
-            generator.cmd_close = False
         elif generator.mode == "manual" and generator.cmd_close:
             generator.cmd_close = False
             if not generator.breaker_closed:
@@ -220,7 +210,7 @@ class ProtectionMixin:
             setattr(self, flash_attr, 15)
         if getattr(self, flash_attr) > 0:
             setattr(self, flash_attr, getattr(self, flash_attr) - 1)
-            setattr(self, text_attr, f"Gen{gen_id}: ⚡ 同期条件满足，可合闸")
+            setattr(self, text_attr, f"Gen{gen_id}: 同期窗口内")
             setattr(self, bg_attr, "orange")
             setattr(self, visual_attr, False)
         else:

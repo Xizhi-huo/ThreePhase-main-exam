@@ -198,19 +198,6 @@ QLabel[syncStateHero="true"][tone="danger"] {{
     color: {danger};
 }}
 
-QLabel[stepHeader="true"] {{
-    color: {text_main};
-    font-size: 20px;
-    font-weight: 800;
-    padding: 2px 0 4px 0;
-}}
-
-QLabel[stepDescription="true"] {{
-    color: {text_muted};
-    font-size: 13px;
-    padding: 0 0 4px 0;
-}}
-
 QLabel[badge="true"] {{
     background: {bg_surface};
     border: 1px solid {border};
@@ -265,80 +252,6 @@ QLabel[badge="true"][criteriaBadge="true"] {{
     min-height: 22px;
 }}
 
-QLabel[stepBanner="true"] {{
-    background: {bg_surface_alt};
-    border: 1px solid {border};
-    border-radius: 12px;
-    padding: 10px 12px;
-    color: {text_body};
-    font-size: 13px;
-    font-weight: 700;
-}}
-
-QLabel[stepBanner="true"][tone="neutral"] {{
-    background: {bg_surface_alt};
-    color: {text_muted};
-    border-color: {border};
-}}
-
-QLabel[stepBanner="true"][tone="primary"] {{
-    background: {primary_soft};
-    color: {primary};
-    border-color: #bfdbfe;
-}}
-
-QLabel[stepBanner="true"][tone="info"] {{
-    background: {info_soft};
-    color: {info};
-    border-color: #bfdbfe;
-}}
-
-QLabel[stepBanner="true"][tone="success"] {{
-    background: {success_soft};
-    color: {success};
-    border-color: #bbf7d0;
-}}
-
-QLabel[stepBanner="true"][tone="warning"] {{
-    background: {warning_soft};
-    color: {warning};
-    border-color: #fed7aa;
-}}
-
-QLabel[stepBanner="true"][tone="danger"] {{
-    background: {danger_soft};
-    color: {danger};
-    border-color: #fecaca;
-}}
-
-QLabel[stepListItem="true"] {{
-    color: {text_muted};
-    font-size: 12px;
-    padding: 1px 0;
-}}
-
-QLabel[stepListItem="true"][tone="success"] {{
-    color: {success};
-}}
-
-QLabel[stepListItem="true"][tone="active"] {{
-    color: {text_body};
-}}
-
-QLabel[stepListItem="true"][tone="muted"] {{
-    color: {text_soft};
-}}
-
-QLabel[stepHint="true"] {{
-    color: {text_muted};
-    font-size: 12px;
-}}
-
-QLabel[stepStatus="true"] {{
-    color: {text_body};
-    font-size: 13px;
-}}
-
 QLabel[noteText="true"] {{
     color: {text_muted};
     font-size: 11px;
@@ -387,35 +300,6 @@ QLabel[feedbackText="true"][tone="info"] {{
     color: {info};
 }}
 
-QLabel[liveText="true"] {{
-    color: {text_body};
-    font-size: 15px;
-}}
-
-QLabel[liveText="true"][tone="neutral"] {{
-    color: #444444;
-}}
-
-QLabel[liveText="true"][tone="muted"] {{
-    color: #999999;
-}}
-
-QLabel[liveText="true"][tone="success"] {{
-    color: {success};
-}}
-
-QLabel[liveText="true"][tone="warning"] {{
-    color: {warning};
-}}
-
-QLabel[liveText="true"][tone="danger"] {{
-    color: {danger};
-}}
-
-QLabel[liveText="true"][tone="info"] {{
-    color: {info};
-}}
-
 QLabel[recordValue="true"] {{
     color: {text_muted};
     font-size: 14px;
@@ -455,10 +339,6 @@ QWidget[testPanelBar="true"] {{
 QWidget[testPanelBar="true"][barRole="footer"] {{
     border-top: 1px solid {border};
     border-bottom: none;
-}}
-
-QWidget[stepPage="true"] {{
-    background: {bg_app};
 }}
 
 QWidget[actionRow="true"] {{

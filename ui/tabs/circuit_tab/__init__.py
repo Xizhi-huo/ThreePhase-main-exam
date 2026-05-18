@@ -47,8 +47,6 @@ class CircuitTab(
         sidebar_badges: Dict[str, QtWidgets.QLabel],
         apply_badge_tone: Callable[[QtWidgets.QWidget, str], None],
         on_circuit_click: Callable[[object], None],
-        is_test_mode_active: Callable[[], bool],
-        get_current_test_step: Callable[[], int],
         parent: QtWidgets.QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -56,8 +54,6 @@ class CircuitTab(
         self._sidebar_badges = sidebar_badges
         self._apply_badge_tone_cb = apply_badge_tone
         self._on_circuit_click = on_circuit_click
-        self._is_test_mode_active_cb = is_test_mode_active
-        self._get_current_test_step_cb = get_current_test_step
         self._phase_wiring: PhaseWiringSession = PhaseWiringSession()
         self._build()
 

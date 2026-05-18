@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from PyQt5 import QtCore, QtWidgets
 
+from domain.enums import BreakerPosition
 from domain.node_map import NODES
 from ui.dialogs.blackbox import show_blackbox_dialog
+from ui.dialogs.measurement_board import show_measurement_board_dialog
 from ui.tabs.circuit_tab import PhaseWiringStatus
 from ui.widgets.control_panel import GeneratorCard, ParamControlsPage, RunControlsPage
 from ui.widgets.control_panel._widget_tokens import (
@@ -17,6 +19,16 @@ from ui.widgets.control_panel._widget_tokens import (
 
 class WidgetBuilderMixin:
     """Right-side control panel for the standalone exam console."""
+
+    LIVE_LINE_HIT_TOLERANCE_PX = 5.0
+    _PRIMARY_WIRE_XS = {
+        1: (0.240, 0.280, 0.320),
+        2: (0.680, 0.720, 0.760),
+    }
+    _PRIMARY_BUS_Y = (0.115, 0.090, 0.065)
+    _PRIMARY_GEN_SIDE_Y = 0.455
+    _PRIMARY_CB_TOP_Y = 0.200
+    _PRIMARY_CB_BOTTOM_Y = 0.130
 
     @staticmethod
     def _refresh_widget_styles(*widgets):
@@ -68,6 +80,7 @@ class WidgetBuilderMixin:
             on_start_free_exam=self._on_start_free_exam,
             on_reset_free_exam=self._on_reset_free_exam,
             on_record_measurement=self._on_free_exam_record_measurement,
+            on_show_measurement_board=self._show_measurement_board,
             on_show_blackbox=self._show_free_exam_blackbox,
             on_enable_phase_seq_meter=self._enable_free_exam_phase_seq_meter,
             on_disable_phase_seq_meter=self._disable_free_exam_phase_seq_meter,
@@ -155,8 +168,13 @@ class WidgetBuilderMixin:
 
     def _on_free_exam_record_measurement(self) -> None:
         if not self.ctrl.record_free_exam_measurement():
-            self.show_warning("尚未开始考核", "当前未处于考核进行状态。")
+            reason = self.ctrl.record_free_exam_measurement_reject_reason()
+            if reason == "inactive":
+                self.show_warning("尚未开始考核", "当前未处于考核进行状态。")
         self._update_free_exam_panel()
+
+    def _show_measurement_board(self, records) -> None:
+        show_measurement_board_dialog(self, records=records, sim_state=self.ctrl.sim_state)
 
     def _enable_free_exam_phase_seq_meter(self) -> None:
         self.enable_phase_seq_meter()
@@ -181,54 +199,54 @@ class WidgetBuilderMixin:
             page.refresh_free_exam_panel(getattr(self.ctrl, "free_exam_state", None))
 
     @staticmethod
-    def _point_segment_distance(px: float, py: float, ax: float, ay: float, bx: float, by: float) -> float:
+    def _point_segment_projected_distance(px: float, py: float, ax: float, ay: float, bx: float, by: float) -> float | None:
         dx = bx - ax
         dy = by - ay
         length_sq = dx * dx + dy * dy
         if length_sq <= 1e-12:
             return ((px - ax) ** 2 + (py - ay) ** 2) ** 0.5
         t = ((px - ax) * dx + (py - ay) * dy) / length_sq
-        t = max(0.0, min(1.0, t))
+        if t < 0.0 or t > 1.0:
+            return None
         cx = ax + t * dx
         cy = ay + t * dy
         return ((px - cx) ** 2 + (py - cy) ** 2) ** 0.5
 
-    def _find_primary_voltage_contact_node(self, x: float, y: float) -> str | None:
-        point_threshold = 0.060
-        segment_threshold = 0.018
-        best_node = None
-        best_dist = point_threshold
+    def _primary_live_line_segments(self, gen_id: int):
+        gen = self.ctrl.sim_state.gen1 if gen_id == 1 else self.ctrl.sim_state.gen2
+        if not gen.running:
+            return ()
 
-        for node_name, data in NODES.items():
-            if not node_name.startswith("PRI_PT"):
-                continue
-            dist = ((x - data[0]) ** 2 + (y - data[1]) ** 2) ** 0.5
-            if dist < best_dist:
-                best_node = node_name
-                best_dist = dist
+        segments = []
+        for x, bus_y in zip(self._PRIMARY_WIRE_XS[gen_id], self._PRIMARY_BUS_Y):
+            segments.append((x, self._PRIMARY_GEN_SIDE_Y, x, self._PRIMARY_CB_TOP_Y))
+            if gen.breaker_position == BreakerPosition.WORKING and gen.breaker_closed:
+                segments.append((x, self._PRIMARY_CB_TOP_Y, x, self._PRIMARY_CB_BOTTOM_Y))
+                segments.append((x, self._PRIMARY_CB_BOTTOM_Y, x, bus_y))
+        return tuple(segments)
 
-        pt_cy = {"PT1": 0.355, "PT2": 0.205, "PT3": 0.355}
-        h = 0.168
-        for pt_name, cy in pt_cy.items():
-            lower_bus_y = cy - h * 0.13
-            bottom_y = cy - h * 0.46
-            for phase in ("A", "B", "C"):
-                primary_node = f"PRI_{pt_name}_{phase}"
-                secondary_node = f"{pt_name}_{phase}"
-                if primary_node not in NODES or secondary_node not in NODES:
-                    continue
-                sx, sy = NODES[primary_node][:2]
-                tx = NODES[secondary_node][0]
-                segments = (
-                    (tx, lower_bus_y, tx, bottom_y),
-                    (tx, bottom_y, tx, sy),
-                    (tx, sy, sx, sy),
+    def _find_live_primary_line_contact(self, event) -> int | None:
+        if event.x is None or event.y is None:
+            return None
+
+        best_gen_id = None
+        best_dist = self.LIVE_LINE_HIT_TOLERANCE_PX
+        for gen_id in (1, 2):
+            for ax, ay, bx, by in self._primary_live_line_segments(gen_id):
+                start_px, start_py = self.ax_circuit.transData.transform((ax, ay))
+                end_px, end_py = self.ax_circuit.transData.transform((bx, by))
+                dist = self._point_segment_projected_distance(
+                    float(event.x),
+                    float(event.y),
+                    float(start_px),
+                    float(start_py),
+                    float(end_px),
+                    float(end_py),
                 )
-                for ax, ay, bx, by in segments:
-                    if self._point_segment_distance(x, y, ax, ay, bx, by) <= segment_threshold:
-                        return primary_node
-
-        return best_node
+                if dist is not None and dist <= best_dist:
+                    best_gen_id = gen_id
+                    best_dist = dist
+        return best_gen_id
 
     def _on_circuit_click(self, event) -> None:
         if self._circuit_tab.get_phase_wiring_status() != PhaseWiringStatus.IDLE:
@@ -240,15 +258,14 @@ class WidgetBuilderMixin:
         if event.inaxes != self.ax_circuit or event.xdata is None or event.ydata is None:
             return
 
-        primary_contact_node = self._find_primary_voltage_contact_node(event.xdata, event.ydata)
-        if primary_contact_node:
-            accident_message = self.ctrl.handle_primary_probe_contact(primary_contact_node)
+        primary_line_gen_id = self._find_live_primary_line_contact(event)
+        if primary_line_gen_id is not None:
+            accident_message = self.ctrl.handle_primary_line_contact(primary_line_gen_id)
             if accident_message:
                 self.show_warning("一次侧带电接触", accident_message)
                 self.sync_runtime_controls_from_state()
                 self._update_free_exam_panel()
                 return
-
         closest_node = None
         min_dist = 0.04
         for name, data in NODES.items():
@@ -258,13 +275,6 @@ class WidgetBuilderMixin:
                 min_dist = dist
 
         if closest_node:
-            accident_message = self.ctrl.handle_primary_probe_contact(closest_node)
-            if accident_message:
-                self.show_warning("一次侧带电接触", accident_message)
-                self.sync_runtime_controls_from_state()
-                self._update_free_exam_panel()
-                return
-
             sim = self.ctrl.sim_state
             if sim.probe1_node is None:
                 sim.probe1_node = closest_node

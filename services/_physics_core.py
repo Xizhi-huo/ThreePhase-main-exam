@@ -104,14 +104,11 @@ class WaveformMixin:
         speed_factor = self._control_speed_factor(sim)
         for generator in (sim.gen1, sim.gen2):
             target_amp = generator.amp if generator.running else 0.0
-            if generator.mode == "auto" and not generator.breaker_closed:
-                generator.actual_amp = target_amp
-            else:
-                climb_speed = 185.0 * sim.gov_gain * speed_factor
-                if generator.actual_amp < target_amp:
-                    generator.actual_amp = min(target_amp, generator.actual_amp + climb_speed)
-                elif generator.actual_amp > target_amp:
-                    generator.actual_amp = max(target_amp, generator.actual_amp - climb_speed)
+            climb_speed = 185.0 * sim.gov_gain * speed_factor
+            if generator.actual_amp < target_amp:
+                generator.actual_amp = min(target_amp, generator.actual_amp + climb_speed)
+            elif generator.actual_amp > target_amp:
+                generator.actual_amp = max(target_amp, generator.actual_amp - climb_speed)
         return sim.gen1.actual_amp, sim.gen2.actual_amp
 
     def _compute_wave_state(self, sim, is_isolated, g1_on_bus, g2_on_bus, a1, a2) -> dict[str, float]:

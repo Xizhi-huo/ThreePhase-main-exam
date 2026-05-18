@@ -1,6 +1,5 @@
 from dataclasses import dataclass, field
 from typing import Optional
-
 from domain.constants import DEFAULT_PT_BUS_RATIO, DEFAULT_PT_GEN_RATIO, DEFAULT_PT3_RATIO
 from domain.enums import BreakerPosition, SystemMode
 
@@ -48,8 +47,6 @@ class SimulationState:
     multimeter_mode: bool = False
     fault_reverse_bc: bool = False
     paused: bool = False
-    auto_sync_active: bool = False
-    sync_target: Optional[str] = None
     feeder_position: str = BreakerPosition.DISCONNECTED
     feeder_closed: bool = False
     grounding_mode: str = "小电阻接地"

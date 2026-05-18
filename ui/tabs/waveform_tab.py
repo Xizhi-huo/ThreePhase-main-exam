@@ -114,7 +114,7 @@ class WaveformTab(QtWidgets.QWidget):
         title.setProperty("sectionTitle", True)
         layout.addWidget(title)
 
-        subtitle = QtWidgets.QLabel("先看同期结论，再看波形和相量收敛。")
+        subtitle = QtWidgets.QLabel("实时显示频差、压差、相角差与波形状态。")
         subtitle.setProperty("sectionCaption", True)
         layout.addWidget(subtitle)
 
@@ -663,18 +663,17 @@ class WaveformTab(QtWidgets.QWidget):
         volt_ok = abs(delta_v) <= SYNC_VOLT_OK_V
         phase_ok = abs(delta_theta) <= SYNC_PHASE_OK_DEG
         if freq_ok and volt_ok and phase_ok:
-            return "参数范围内", "success", "频差、压差和相角差均在设定范围内。"
+            return "同期窗口内", "success", "频差、压差和相角差位于同期窗口。"
         if (
             abs(delta_f) <= SYNC_WARN_FREQ_HZ
             and abs(delta_v) <= SYNC_WARN_VOLT_V
             and abs(delta_theta) <= SYNC_WARN_PHASE_DEG
         ):
-            return "参数邻近", "warning", "频差、压差和相角差接近设定范围。"
-        return "参数范围外", "danger", "频差、压差或相角差超出设定范围。"
+            return "接近同期窗口", "warning", "频差、压差和相角差接近同期窗口。"
+        return "同期窗口外", "danger", "频差、压差或相角差位于同期窗口外。"
 
     def _mode_text(self, mode):
         mapping = {
-            "auto": "自动",
             "manual": "手动",
             "stop": "停止",
         }

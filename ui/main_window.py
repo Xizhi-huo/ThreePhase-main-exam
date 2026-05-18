@@ -74,8 +74,6 @@ class PowerSyncUI(WidgetBuilderMixin, QtWidgets.QMainWindow):
             },
             apply_badge_tone=self._apply_badge_tone,
             on_circuit_click=self._on_circuit_click,
-            is_test_mode_active=self._is_test_mode_active,
-            get_current_test_step=self._current_test_step,
             parent=self,
         )
         self.tab_widget.addTab(self._circuit_tab, "母排拓扑与环流监测")
@@ -91,11 +89,6 @@ class PowerSyncUI(WidgetBuilderMixin, QtWidgets.QMainWindow):
     def _on_resize_done(self) -> None:
         self._is_resizing = False
 
-    def _is_test_mode_active(self) -> bool:
-        return False
-
-    def _current_test_step(self) -> int:
-        return 0
 
     @property
     def ax_circuit(self):
@@ -191,125 +184,90 @@ class PowerSyncUI(WidgetBuilderMixin, QtWidgets.QMainWindow):
         ending = parts[3] if len(parts) > 3 else "本次考核终止。"
         return risk, consequence, caption, ending, image_name
 
-    def _show_accident_warning(self, title: str, message: str) -> None:
-        risk, consequence, caption, ending, image_name = self._parse_accident_message(message)
-
+    def _show_simple_accident_warning(
+        self,
+        title: str,
+        risk: str,
+        consequence: str,
+        caption: str,
+        ending: str,
+        image_name: str,
+    ) -> None:
         dialog = QtWidgets.QDialog(self)
         dialog.setWindowTitle(title)
         dialog.setModal(True)
-        dialog.resize(640, 700)
+        dialog.resize(560, 620)
         dialog.setStyleSheet(
             """
             QDialog {
-                background: #0f172a;
+                background: #f8fafc;
             }
             QLabel {
                 font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
                 letter-spacing: 0px;
             }
             QPushButton {
-                min-width: 110px;
-                min-height: 34px;
-                border-radius: 6px;
-                background: #dc2626;
+                min-width: 96px;
+                min-height: 30px;
+                border-radius: 5px;
+                background: #b91c1c;
                 color: white;
                 font-weight: 700;
                 font-size: 13px;
-                padding: 6px 18px;
+                padding: 5px 16px;
             }
             QPushButton:hover {
-                background: #b91c1c;
+                background: #991b1b;
             }
             """
         )
 
         layout = QtWidgets.QVBoxLayout(dialog)
         layout.setContentsMargins(18, 16, 18, 16)
-        layout.setSpacing(10)
-
-        header = QtWidgets.QFrame()
-        header.setStyleSheet(
-            "QFrame {"
-            "background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #7f1d1d, stop:1 #dc2626);"
-            "border: 1px solid #fca5a5; border-radius: 12px;"
-            "}"
-        )
-        header_layout = QtWidgets.QVBoxLayout(header)
-        header_layout.setContentsMargins(16, 12, 16, 12)
-        header_layout.setSpacing(4)
-
-        eyebrow_lbl = QtWidgets.QLabel("一次侧带电接触")
-        eyebrow_lbl.setStyleSheet("font-size:12px; font-weight:700; color:#fecaca;")
-        header_layout.addWidget(eyebrow_lbl)
+        layout.setSpacing(12)
 
         risk_lbl = QtWidgets.QLabel(risk)
         risk_lbl.setWordWrap(True)
-        risk_lbl.setStyleSheet("font-size:26px; font-weight:900; color:#ffffff;")
-        header_layout.addWidget(risk_lbl)
-        layout.addWidget(header)
-
-        consequence_panel = QtWidgets.QFrame()
-        consequence_panel.setStyleSheet(
-            "QFrame { background:#fff7ed; border:1px solid #fb923c; border-radius:10px; }"
-        )
-        consequence_layout = QtWidgets.QVBoxLayout(consequence_panel)
-        consequence_layout.setContentsMargins(14, 10, 14, 10)
-        consequence_layout.setSpacing(5)
-
-        consequence_title = QtWidgets.QLabel("工程后果")
-        consequence_title.setStyleSheet("font-size:12px; font-weight:900; color:#9a3412;")
-        consequence_layout.addWidget(consequence_title)
+        risk_lbl.setStyleSheet("font-size:22px; font-weight:900; color:#b91c1c;")
+        layout.addWidget(risk_lbl)
 
         consequence_lbl = QtWidgets.QLabel(consequence)
         consequence_lbl.setWordWrap(True)
         consequence_lbl.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
-        consequence_lbl.setStyleSheet("font-size:15px; font-weight:700; color:#431407; line-height:150%;")
-        consequence_layout.addWidget(consequence_lbl)
-        layout.addWidget(consequence_panel)
+        consequence_lbl.setStyleSheet("font-size:14px; font-weight:600; color:#1f2937;")
+        layout.addWidget(consequence_lbl)
 
         if caption:
-            caption_panel = QtWidgets.QFrame()
-            caption_panel.setStyleSheet(
-                "QFrame { background:#422006; border:1px solid #fbbf24; border-radius:10px; }"
-            )
-            caption_layout = QtWidgets.QVBoxLayout(caption_panel)
-            caption_layout.setContentsMargins(14, 10, 14, 10)
             caption_lbl = QtWidgets.QLabel(caption)
             caption_lbl.setWordWrap(True)
             caption_lbl.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
-            caption_lbl.setStyleSheet("font-size:18px; font-weight:900; color:#fde68a; line-height:150%;")
-            caption_layout.addWidget(caption_lbl)
-            layout.addWidget(caption_panel)
+            caption_lbl.setStyleSheet(
+                "font-size:15px; font-weight:800; color:#7c2d12;"
+                "background:#fff7cc; border:1px solid #fde68a; border-radius:8px;"
+                "padding:9px 11px;"
+            )
+            layout.addWidget(caption_lbl)
 
         image_path = ACCIDENT_IMAGE_DIR / image_name if image_name else None
         if image_path is not None and image_path.exists():
             pixmap = QtGui.QPixmap(str(image_path))
             if not pixmap.isNull():
-                image_frame = QtWidgets.QFrame()
-                image_frame.setStyleSheet(
-                    "QFrame { background:#020617; border:1px solid #334155; border-radius:10px; }"
-                )
-                image_layout = QtWidgets.QVBoxLayout(image_frame)
-                image_layout.setContentsMargins(8, 8, 8, 8)
                 image_lbl = QtWidgets.QLabel()
                 image_lbl.setAlignment(QtCore.Qt.AlignCenter)
+                image_lbl.setStyleSheet("background:#ffffff; border:1px solid #d1d5db; border-radius:8px; padding:6px;")
                 image_lbl.setPixmap(
                     pixmap.scaled(
-                        520,
-                        280,
+                        480,
+                        260,
                         QtCore.Qt.KeepAspectRatio,
                         QtCore.Qt.SmoothTransformation,
                     )
                 )
-                image_layout.addWidget(image_lbl)
-                layout.addWidget(image_frame, 0, QtCore.Qt.AlignCenter)
+                layout.addWidget(image_lbl, 0, QtCore.Qt.AlignCenter)
 
         ending_lbl = QtWidgets.QLabel(ending)
         ending_lbl.setAlignment(QtCore.Qt.AlignCenter)
-        ending_lbl.setStyleSheet(
-            "font-size:18px; font-weight:900; color:#ffffff; background:#991b1b;"
-            "border:1px solid #fca5a5; border-radius:8px; padding:8px 10px;"
-        )
+        ending_lbl.setStyleSheet("font-size:14px; font-weight:800; color:#b91c1c;")
         layout.addWidget(ending_lbl)
 
         buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok)
@@ -319,6 +277,10 @@ class PowerSyncUI(WidgetBuilderMixin, QtWidgets.QMainWindow):
         buttons.accepted.connect(dialog.accept)
         layout.addWidget(buttons, 0, QtCore.Qt.AlignRight)
         dialog.exec_()
+
+    def _show_accident_warning(self, title: str, message: str) -> None:
+        risk, consequence, caption, ending, image_name = self._parse_accident_message(message)
+        self._show_simple_accident_warning(title, risk, consequence, caption, ending, image_name)
 
     def show_warning(self, title: str, message: str) -> None:
         self._consume_controller_ui_requests()

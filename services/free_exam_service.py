@@ -27,6 +27,7 @@ class FreeExamService:
         self._get_pending_accident_scene_id = get_pending_accident_scene_id
         self._get_phase_sequence_measurement = get_phase_sequence_measurement
         self._last_record_perf: float | None = None
+        self._last_record_reject_reason = ""
 
     def create_free_exam_state(self) -> FreeExamState:
         return FreeExamState()
@@ -34,6 +35,7 @@ class FreeExamService:
     def reset_free_exam(self) -> None:
         self._set_state(self.create_free_exam_state())
         self._last_record_perf = None
+        self._last_record_reject_reason = ""
 
     def start_free_exam(self, scenario_id: str) -> None:
         state = self.create_free_exam_state()
@@ -42,13 +44,17 @@ class FreeExamService:
         state.result = "running"
         self._set_state(state)
         self._last_record_perf = None
+        self._last_record_reject_reason = ""
 
     def record_current_measurement(self) -> bool:
         state = self._get_state()
+        self._last_record_reject_reason = ""
         if not state.active:
+            self._last_record_reject_reason = "inactive"
             return False
         now = time.perf_counter()
         if self._last_record_perf is not None and (now - self._last_record_perf) < 0.4:
+            self._last_record_reject_reason = "rate_limited"
             return False
         phase_record = None
         if self._get_phase_sequence_measurement is not None:
@@ -65,10 +71,53 @@ class FreeExamService:
                 "value": getattr(self._physics, "meter_voltage", None),
                 "status": getattr(self._physics, "meter_status", "idle"),
             }
-        state.measurement_records.append(record)
-        state.next_record_no += 1
+        if self._upsert_measurement_record(state, record):
+            state.next_record_no += 1
         self._last_record_perf = now
         return True
+
+    def last_record_reject_reason(self) -> str:
+        return self._last_record_reject_reason
+
+    def _upsert_measurement_record(self, state: FreeExamState, record: dict) -> bool:
+        record_key = self._measurement_record_key(record)
+        if record_key is not None:
+            for existing in state.measurement_records:
+                if self._measurement_record_key(existing) == record_key:
+                    original_no = existing.get("no")
+                    existing.clear()
+                    existing.update(record)
+                    existing["no"] = original_no
+                    return False
+
+        state.measurement_records.append(record)
+        return True
+
+    @classmethod
+    def _measurement_record_key(cls, record: Mapping[str, object]):
+        kind = str(record.get("kind") or "multimeter")
+        if kind == "phase_sequence":
+            pt_name = record.get("pt_name")
+            if pt_name:
+                return ("phase_sequence", str(pt_name))
+            nodes = cls._normalize_record_nodes(record.get("nodes"))
+            return ("phase_sequence", nodes) if nodes else None
+
+        nodes = cls._normalize_record_nodes(record.get("nodes"))
+        return (kind, nodes) if nodes else None
+
+    @staticmethod
+    def _normalize_record_nodes(nodes) -> tuple[str, ...]:
+        if nodes is None:
+            return ()
+        if isinstance(nodes, str):
+            raw_nodes = (nodes,)
+        else:
+            try:
+                raw_nodes = tuple(nodes)
+            except TypeError:
+                raw_nodes = (nodes,)
+        return tuple(sorted(str(node) for node in raw_nodes if node))
 
     def _current_multimeter_nodes(self):
         nodes = getattr(self._physics, "meter_nodes", None)

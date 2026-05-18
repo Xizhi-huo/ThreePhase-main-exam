@@ -34,8 +34,6 @@ class GeneratorCard(QtWidgets.QGroupBox):
 
     def _build(self):
         gen = self._generator()
-        if self.gen_id == 2 and gen.mode == "auto":
-            gen.mode = "stop"
         self.setProperty("cardTone", "info" if self.gen_id == 1 else "default")
         layout = QtWidgets.QVBoxLayout(self)
         layout.setSpacing(6)
@@ -82,40 +80,39 @@ class GeneratorCard(QtWidgets.QGroupBox):
             layout.addWidget(row_widget)
             self.entry_map[attr] = (slider, entry)
 
-        mode_row = QtWidgets.QWidget()
-        mode_layout = QtWidgets.QHBoxLayout(mode_row)
-        mode_layout.setContentsMargins(0, 0, 0, 0)
-        mode_layout.addWidget(QtWidgets.QLabel("PCC模式:"))
+        mode_position_row = QtWidgets.QWidget()
+        mode_position_layout = QtWidgets.QGridLayout(mode_position_row)
+        mode_position_layout.setContentsMargins(0, 0, 0, 0)
+        mode_position_layout.setHorizontalSpacing(55)
+        mode_position_layout.setVerticalSpacing(20)
+
+        mode_position_layout.addWidget(QtWidgets.QLabel("PCC模式:"), 0, 0)
         self.mode_bg = QtWidgets.QButtonGroup(self)
         mode_options = [("停机(0)", "stop"), ("手动", "manual")]
-        if self.gen_id == 1:
-            mode_options.append(("自动", "auto"))
-        for text, value in mode_options:
+        for col, (text, value) in enumerate(mode_options, start=1):
             radio = QtWidgets.QRadioButton(text)
             radio.setProperty("value", value)
             radio.setChecked(gen.mode == value)
             radio.toggled.connect(lambda checked, v=value: self._on_mode_toggled(v, checked))
             self.mode_bg.addButton(radio)
-            mode_layout.addWidget(radio)
-        layout.addWidget(mode_row)
+            mode_position_layout.addWidget(radio, 0, col)
 
-        position_row = QtWidgets.QWidget()
-        position_layout = QtWidgets.QHBoxLayout(position_row)
-        position_layout.setContentsMargins(0, 0, 0, 0)
-        position_layout.addWidget(QtWidgets.QLabel("开关柜:"))
+        mode_position_layout.addWidget(QtWidgets.QLabel("开关柜:"), 1, 0)
         self.pos_bg = QtWidgets.QButtonGroup(self)
-        for text, value in [
+        for col, (text, value) in enumerate([
             ("脱开", BreakerPosition.DISCONNECTED),
             ("试验", BreakerPosition.TEST),
             ("工作", BreakerPosition.WORKING),
-        ]:
+        ], start=1):
             radio = QtWidgets.QRadioButton(text)
             radio.setProperty("value", value)
             radio.setChecked(gen.breaker_position == value)
             radio.toggled.connect(lambda checked, v=value: self._on_position_toggled(v, checked))
             self.pos_bg.addButton(radio)
-            position_layout.addWidget(radio)
-        layout.addWidget(position_row)
+            mode_position_layout.addWidget(radio, 1, col)
+
+        mode_position_layout.setColumnStretch(4, 1)
+        layout.addWidget(mode_position_row)
 
         self.status_lbl = QtWidgets.QLabel("断路器: OPEN")
         apply_badge_tone(self.status_lbl, "info")

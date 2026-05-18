@@ -73,7 +73,7 @@ class PowerSyncController:
         # 初始化按依赖层级排列；仅保留两处必要延迟绑定：
         # blackbox_handler ↔ fault_mgr 存在真实循环，hardware_actions 需要晚建的 ui。
         # 其他服务尽量直接引用，避免构造期回调顺序耦合。
-        # 旧教学态对象保留到 P3 清理，不参与新增考核语义。
+        # 独立考核版按依赖层级组装状态与服务。
         # Layer 0：纯状态对象（无依赖）
         self.sim_state = SimulationState(
             gen1=GeneratorState(
@@ -104,6 +104,7 @@ class PowerSyncController:
         self.phase_resolver = PhaseOrderResolver(
             sim_state=self.sim_state,
             get_pt_phase_orders=lambda: self.pt_phase_orders,
+            get_g1_blackbox_order=lambda: self.g1_blackbox_order,
             get_g2_blackbox_order=lambda: self.g2_blackbox_order,
         )
 
@@ -121,8 +122,11 @@ class PowerSyncController:
             set_pt1_pri_blackbox_order=lambda value: setattr(self, "pt1_pri_blackbox_order", value),
             get_pt1_sec_blackbox_order=lambda: self.pt1_sec_blackbox_order,
             set_pt1_sec_blackbox_order=lambda value: setattr(self, "pt1_sec_blackbox_order", value),
+            get_pt2_sec_blackbox_order=lambda: self.pt2_sec_blackbox_order,
+            set_pt2_sec_blackbox_order=lambda value: setattr(self, "pt2_sec_blackbox_order", value),
             apply_g2_blackbox_to_pt3=self.phase_order_state.apply_g2_blackbox_to_pt3,
             apply_pt1_blackbox_to_pt_phases=self.phase_order_state.apply_pt1_blackbox_to_pt_phases,
+            apply_pt2_blackbox_to_pt2=self.phase_order_state.apply_pt2_blackbox_to_pt2,
         )
         self.fault_mgr = FaultManager(
             sim_state=self.sim_state,
@@ -138,6 +142,8 @@ class PowerSyncController:
             set_pt1_pri_blackbox_order=lambda value: setattr(self, "pt1_pri_blackbox_order", value),
             get_pt1_sec_blackbox_order=lambda: self.pt1_sec_blackbox_order,
             set_pt1_sec_blackbox_order=lambda value: setattr(self, "pt1_sec_blackbox_order", value),
+            get_pt2_sec_blackbox_order=lambda: self.pt2_sec_blackbox_order,
+            set_pt2_sec_blackbox_order=lambda value: setattr(self, "pt2_sec_blackbox_order", value),
         )
 
         # Layer 3：物理引擎（依赖 phase_resolver、回调）
@@ -212,6 +218,14 @@ class PowerSyncController:
     @pt1_sec_blackbox_order.setter
     def pt1_sec_blackbox_order(self, value):
         self.phase_order_state.pt1_sec_blackbox_order[:] = list(value)
+
+    @property
+    def pt2_sec_blackbox_order(self):
+        return self.phase_order_state.pt2_sec_blackbox_order
+
+    @pt2_sec_blackbox_order.setter
+    def pt2_sec_blackbox_order(self, value):
+        self.phase_order_state.pt2_sec_blackbox_order[:] = list(value)
 
     def is_free_exam_active(self) -> bool:
         return bool(self.free_exam_state.active)
@@ -304,10 +318,17 @@ class PowerSyncController:
     def record_free_exam_measurement(self) -> bool:
         return self.free_exam_svc.record_current_measurement()
 
-    def handle_primary_probe_contact(self, node_name: str) -> str | None:
-        if not self._is_primary_voltage_node(node_name):
+    def record_free_exam_measurement_reject_reason(self) -> str:
+        return self.free_exam_svc.last_record_reject_reason()
+
+    def handle_primary_line_contact(self, gen_id: int) -> str | None:
+        if gen_id == 1:
+            gen = self.sim_state.gen1
+        elif gen_id == 2:
+            gen = self.sim_state.gen2
+        else:
             return None
-        if not self._is_primary_voltage_node_live(node_name):
+        if not gen.running:
             return None
 
         title, consequence, caption, image = random.choice(PRIMARY_CONTACT_ACCIDENTS)
@@ -321,35 +342,6 @@ class PowerSyncController:
         self.sim_state.probe1_node = None
         self.sim_state.probe2_node = None
         return message
-
-    @staticmethod
-    def _is_primary_voltage_node(node_name: str) -> bool:
-        return node_name.startswith("PRI_PT")
-
-    def _is_primary_voltage_node_live(self, node_name: str) -> bool:
-        parts = node_name.split("_")
-        if len(parts) < 3:
-            return False
-
-        sim = self.sim_state
-        pt_name = parts[1]
-        gen1_on_bus = (
-            sim.gen1.breaker_position == BreakerPosition.WORKING
-            and sim.gen1.breaker_closed
-        )
-        gen2_on_bus = (
-            sim.gen2.breaker_position == BreakerPosition.WORKING
-            and sim.gen2.breaker_closed
-        )
-        bus_live = bool(getattr(self.physics, "bus_live", False) or gen1_on_bus or gen2_on_bus)
-
-        if pt_name == "PT1":
-            return bool(sim.gen1.running)
-        if pt_name == "PT2":
-            return bus_live
-        if pt_name == "PT3":
-            return bool(sim.gen2.running)
-        return False
 
     def get_blackbox_runtime_state(self, target: str):
         return self.blackbox_handler.get_blackbox_runtime_state(target)
@@ -431,12 +423,15 @@ class PowerSyncController:
     def reset_for_scenario(self, scenario_id: str) -> None:
         sim = self.sim_state
         for gen in (sim.gen1, sim.gen2):
+            gen.mode = "stop"
             gen.running = False
             gen.breaker_closed = False
+            gen.breaker_position = BreakerPosition.DISCONNECTED
             gen.cmd_close = False
+            gen.freq = round(random.uniform(48.0, 52.0), 1)
+            gen.amp = round(random.uniform(9500.0, 11500.0), 1)
+            gen.phase_deg = round(random.uniform(-180.0, 180.0), 1)
             gen.actual_amp = 0.0
-        sim.auto_sync_active = False
-        sim.sync_target = None
         sim.multimeter_mode = False
         sim.probe1_node = None
         sim.probe2_node = None

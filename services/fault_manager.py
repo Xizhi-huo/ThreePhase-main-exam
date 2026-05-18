@@ -21,6 +21,8 @@ class FaultManager:
         set_pt1_pri_blackbox_order: Callable[[list], None],
         get_pt1_sec_blackbox_order: Callable[[], list],
         set_pt1_sec_blackbox_order: Callable[[list], None],
+        get_pt2_sec_blackbox_order: Callable[[], list],
+        set_pt2_sec_blackbox_order: Callable[[list], None],
     ):
         self._sim_state = sim_state
         self._blackbox_handler = blackbox_handler
@@ -35,6 +37,8 @@ class FaultManager:
         self._set_pt1_pri_blackbox_order = set_pt1_pri_blackbox_order
         self._get_pt1_sec_blackbox_order = get_pt1_sec_blackbox_order
         self._set_pt1_sec_blackbox_order = set_pt1_sec_blackbox_order
+        self._get_pt2_sec_blackbox_order = get_pt2_sec_blackbox_order
+        self._set_pt2_sec_blackbox_order = set_pt2_sec_blackbox_order
 
     def all_repairable_wiring_targets_normal(self) -> bool:
         relevant_orders = self._get_repairable_wiring_orders()
@@ -55,12 +59,14 @@ class FaultManager:
             relevant_orders.append(self._get_pt1_pri_blackbox_order())
         if fc.params.get('pt1_sec_blackbox_order') is not None:
             relevant_orders.append(self._get_pt1_sec_blackbox_order())
+        if fc.params.get('pt2_sec_blackbox_order') is not None:
+            relevant_orders.append(self._get_pt2_sec_blackbox_order())
         if fc.params.get('g2_blackbox_order') is not None:
             relevant_orders.append(self._get_g2_blackbox_order())
         return relevant_orders
 
     def inject_fault(self, scenario_id: str) -> None:
-        """注入故障场景（由管理员在训练前设置）。scenario_id='' 清除故障。"""
+        """注入或清除考核故障场景；scenario_id='' 表示无故障。"""
         fc = self._sim_state.fault_config
         fc.scenario_id = scenario_id
         fc.active = bool(scenario_id)
@@ -99,6 +105,9 @@ class FaultManager:
         self._set_pt1_sec_blackbox_order(list(
             fc.params.get('pt1_sec_blackbox_order', self._get_pt1_sec_blackbox_order())
         ))
+        self._set_pt2_sec_blackbox_order(list(
+            fc.params.get('pt2_sec_blackbox_order', self._get_pt2_sec_blackbox_order())
+        ))
 
         pt1_order = fc.params.get('pt1_phase_order')
         if pt1_order:
@@ -115,15 +124,20 @@ class FaultManager:
 
         if scenario_id == 'E02':
             self._blackbox_handler.sync_g2_blackbox_to_phase_orders()
-        if any(
-                fc.params.get(key) is not None
-                for key in (
-                    'g1_blackbox_order',
-                    'pt1_phase_order',
-                    'pt1_pri_blackbox_order',
-                    'pt1_sec_blackbox_order',
-                )):
+        needs_pt1_sync = any(
+            fc.params.get(key) is not None
+            for key in (
+                'g1_blackbox_order',
+                'pt1_phase_order',
+                'pt1_pri_blackbox_order',
+                'pt1_sec_blackbox_order',
+            )
+        )
+        needs_pt2_sync = fc.params.get('pt2_sec_blackbox_order') is not None
+        if needs_pt1_sync:
             self._blackbox_handler.sync_pt1_blackbox_to_phase_orders()
+        if needs_pt2_sync:
+            self._blackbox_handler.sync_pt2_blackbox_to_phase_orders()
 
     def repair_fault(self, step: int = 4, source: str = 'repair_fault') -> None:
         """学员完成虚拟修复后调用，消除故障效果并重置检测标志。"""
@@ -146,6 +160,8 @@ class FaultManager:
         if fc.params.get('pt1_phase_order') is not None:
             self._get_pt_phase_orders()['PT1'] = ['A', 'B', 'C']
         if fc.params.get('g1_loop_swap') is not None:
+            self._get_pt_phase_orders()['PT2'] = ['A', 'B', 'C']
+        if fc.params.get('pt2_sec_blackbox_order') is not None:
             self._get_pt_phase_orders()['PT2'] = ['A', 'B', 'C']
 
     def maybe_repair_pt_ratio_fault(
@@ -176,6 +192,7 @@ class FaultManager:
         self._set_g2_blackbox_order(list(normal))
         self._set_pt1_pri_blackbox_order(list(normal))
         self._set_pt1_sec_blackbox_order(list(normal))
+        self._set_pt2_sec_blackbox_order(list(normal))
 
     def _reset_pt3_ratio(self) -> None:
         pri, sec = DEFAULT_PT_RATIO_ROWS['pt3_ratio']

@@ -51,6 +51,7 @@ class RunControlsPage(QtWidgets.QWidget):
         on_start_free_exam,
         on_reset_free_exam,
         on_record_measurement,
+        on_show_measurement_board,
         on_show_blackbox,
         on_enable_phase_seq_meter,
         on_disable_phase_seq_meter,
@@ -62,6 +63,7 @@ class RunControlsPage(QtWidgets.QWidget):
         self.on_start_free_exam_cb = on_start_free_exam
         self.on_reset_free_exam_cb = on_reset_free_exam
         self.on_record_measurement_cb = on_record_measurement
+        self.on_show_measurement_board_cb = on_show_measurement_board
         self.on_show_blackbox_cb = on_show_blackbox
         self.on_enable_phase_seq_meter_cb = on_enable_phase_seq_meter
         self.on_disable_phase_seq_meter_cb = on_disable_phase_seq_meter
@@ -140,7 +142,7 @@ class RunControlsPage(QtWidgets.QWidget):
         blackbox_layout.setContentsMargins(8, 8, 8, 8)
         blackbox_layout.setSpacing(6)
         self.blackbox_buttons = {}
-        for idx, target in enumerate(("G1", "G2", "PT1", "PT3")):
+        for idx, target in enumerate(("G1", "G2", "PT1", "PT2", "PT3")):
             button = QtWidgets.QPushButton(target)
             apply_button_tone(button, "secondary", secondary=True)
             button.clicked.connect(lambda checked=False, t=target: self.on_show_blackbox_cb(t))
@@ -149,12 +151,27 @@ class RunControlsPage(QtWidgets.QWidget):
         exam_layout.addWidget(blackbox_group)
 
 
+        measurement_view_row = QtWidgets.QWidget()
+        measurement_view_layout = QtWidgets.QHBoxLayout(measurement_view_row)
+        measurement_view_layout.setContentsMargins(0, 0, 0, 0)
+        measurement_view_layout.setSpacing(8)
+
         self.measurement_log_btn = QtWidgets.QPushButton("测量记录 0")
         self.measurement_log_btn.setCheckable(True)
         self.measurement_log_btn.setToolTip("展开或收起已记录的测量数据")
         set_props(self.measurement_log_btn, segment=True, segmentTone="primary")
         self.measurement_log_btn.clicked.connect(self._on_measurement_log_toggled)
-        exam_layout.addWidget(self.measurement_log_btn)
+
+        self.measurement_board_btn = QtWidgets.QPushButton("分类看板")
+        self.measurement_board_btn.setToolTip("打开已记录测量数据的分类看板")
+        set_props(self.measurement_board_btn, segment=True, segmentTone="primary")
+        self.measurement_board_btn.clicked.connect(
+            lambda: self.on_show_measurement_board_cb(self._measurement_records)
+        )
+
+        measurement_view_layout.addWidget(self.measurement_log_btn, 6)
+        measurement_view_layout.addWidget(self.measurement_board_btn, 4)
+        exam_layout.addWidget(measurement_view_row)
 
         self.measurement_log_panel = QtWidgets.QWidget()
         self.measurement_log_panel.setProperty("measurementPanel", True)
@@ -488,6 +505,7 @@ class RunControlsPage(QtWidgets.QWidget):
 
         self.measurement_log_btn.setText(f"测量记录 {record_count}")
         self.measurement_log_btn.setEnabled(record_count > 0)
+        self.measurement_board_btn.setEnabled(record_count > 0)
         self._sync_measurement_log_visibility()
         if record_count > previous_count and self._measurement_log_expanded:
             QtCore.QTimer.singleShot(0, self._scroll_measurement_log_to_bottom)

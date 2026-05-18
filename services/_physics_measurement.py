@@ -298,6 +298,13 @@ class MeasurementMixin:
                     target=gen_pt_name,
                     point=f'{gen_term}-{bus_phase}',
                 )
+            elif fc.params.get('pt2_sec_blackbox_order') is not None and not is_same_phase:
+                self._mark_fault_detected(
+                    step=4,
+                    source='pt_exam_measurement',
+                    target='PT2',
+                    point=f'{gen_pt_name}_{gen_term}-PT2_{bus_phase}',
+                )
 
         self.meter_phase_match = False if e03_active else is_same_phase
         self.meter_voltage = meter_v

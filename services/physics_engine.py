@@ -2,7 +2,7 @@
 services/physics_engine.py
 物理引擎 ── 通过 Mixin 组合拆分后的四个职责模块：
   · WaveformMixin       波形生成与历史缓冲   (_physics_core.py)
-  · ArbitrationMixin    母排仲裁与自动同步   (_physics_arbitration.py)
+  · ArbitrationMixin    母排仲裁与参考解析   (_physics_arbitration.py)
   · ProtectionMixin     继电保护与断路器逻辑  (_physics_protection.py)
   · MeasurementMixin    接地、PT 测量与万用表  (_physics_measurement.py)
 
