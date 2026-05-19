@@ -21,7 +21,7 @@ class PTWiringWidget(QtWidgets.QWidget):
     下方输入电缆显示上游实际来相顺序；
     A1/B1/C1 显示一次侧传播后的实际相别；
     A2/B2/C2 显示二次侧传播后的实际相别；
-    最上方测量端仅将二次侧当前结果垂直引出，不再额外重排为 ABC。
+    二次侧按内部源相位置连接到测量端，错接时以交叉连线呈现。
     """
 
     _Y_OUT   = 56
@@ -125,7 +125,6 @@ class PTWiringWidget(QtWidgets.QWidget):
             self._sel_sec = None
             self.update()
             return
-        # 第二次点击：互换两个二次侧端子的相
         if pri_hit is not None:
             self._sel_sec = None
             if self._sel_pri is None:
@@ -150,7 +149,8 @@ class PTWiringWidget(QtWidgets.QWidget):
         pri_input = self._pri_input_order
         pri_actual = self._primary_actual_order()
         sec_actual = self._secondary_actual_order()
-        r = 11   # 端子半径
+        labels = ('A', 'B', 'C')
+        r = 11
 
         y_out   = self._Y_OUT
         y_sec   = self._Y_SEC
@@ -159,12 +159,10 @@ class PTWiringWidget(QtWidgets.QWidget):
         y_pri   = self._Y_PRI
         y_cable = self._Y_CABLE
 
-        # 白色背景
         qp.setPen(QtCore.Qt.NoPen)
         qp.setBrush(QtGui.QBrush(QtGui.QColor('#ffffff')))
         qp.drawRoundedRect(0, 0, w, self.height(), 6, 6)
 
-        # 变压器铁芯盒（中间灰色虚线框）
         qp.setPen(QtGui.QPen(QtGui.QColor('#94a3b8'), 1.5, QtCore.Qt.DashLine))
         qp.setBrush(QtGui.QBrush(QtGui.QColor('#f0f9ff')))
         qp.drawRect(16, y_boxt, w - 32, y_boxb - y_boxt)
@@ -176,15 +174,14 @@ class PTWiringWidget(QtWidgets.QWidget):
 
         f9b = QtGui.QFont(); f9b.setPointSize(10); f9b.setBold(True)
         f7  = QtGui.QFont(); f7.setPointSize(8)
+        f7b = QtGui.QFont(); f7b.setPointSize(8); f7b.setBold(True)
 
-        # ═══════════════════ 二次侧（上半部）═══════════════════
-
-        # 测量端口圆：仅垂直引出二次侧当前实际结果
+        # 二次侧：上方为内部源相位置，下方为 a2/b2/c2 测量端子。
         qp.setFont(f7); qp.setPen(QtGui.QPen(QtGui.QColor('#94a3b8')))
         polarity_text = ''.join('+' if p > 0 else '-' for p in self._sec_polarity)
         qp.drawText(QtCore.QRect(0, 12, w, 18), QtCore.Qt.AlignCenter,
                     f"实际输出: {''.join(sec_actual)}    极性: {polarity_text}")
-        for i, ph in enumerate(sec_actual):
+        for i, ph in enumerate(pri_actual):
             x = xs[i]; c = QtGui.QColor(_PC[ph])
             qp.setPen(QtGui.QPen(c.darker(120), 1.5))
             qp.setBrush(QtGui.QBrush(c.lighter(140)))
@@ -194,16 +191,18 @@ class PTWiringWidget(QtWidgets.QWidget):
             qp.drawText(QtCore.QRect(x - r, y_out - r, 2 * r, 2 * r),
                         QtCore.Qt.AlignCenter, ph)
 
-        # 二次侧输出：从 A2/B2/C2 垂直引出当前实际相别
+        # 二次侧交叉连线：从内部源相位置连到当前 a2/b2/c2 端子。
         for i, ph_out in enumerate(sec_actual):
-            sx = xs[i]
-            c  = QtGui.QColor(_PC[ph_out])
+            src_label = self._sec_order[i] if i < len(self._sec_order) else labels[i]
+            src_idx = labels.index(src_label) if src_label in labels else i
+            sx = xs[src_idx]
+            dx = xs[i]
+            c = QtGui.QColor(_PC[ph_out])
             pen = QtGui.QPen(c, 2.2, QtCore.Qt.SolidLine,
                              QtCore.Qt.RoundCap, QtCore.Qt.RoundJoin)
             qp.setPen(pen)
-            qp.drawLine(sx, y_sec - r - 1, sx, y_out + r + 1)
+            qp.drawLine(sx, y_out + r + 1, dx, y_sec - r - 1)
 
-        # 二次侧端子圆（a2/b2/c2，颜色跟随输出相；选中时蓝边）
         sec_lbl = ['a2', 'b2', 'c2']
         for i, ph_out in enumerate(sec_actual):
             x = xs[i]; c = QtGui.QColor(_PC[ph_out])
@@ -213,7 +212,6 @@ class PTWiringWidget(QtWidgets.QWidget):
             qp.setPen(QtGui.QPen(border_c, border_w))
             qp.setBrush(QtGui.QBrush(QtGui.QColor('#ffffff')))
             qp.drawEllipse(x - r, y_sec - r, 2 * r, 2 * r)
-            f7b = QtGui.QFont(); f7b.setPointSize(8); f7b.setBold(True)
             qp.setFont(f7b); qp.setPen(QtGui.QPen(QtGui.QColor('#1e293b')))
             qp.drawText(QtCore.QRect(x - r, y_sec - r, 2 * r, 2 * r),
                         QtCore.Qt.AlignCenter, sec_lbl[i])
@@ -236,9 +234,7 @@ class PTWiringWidget(QtWidgets.QWidget):
         qp.drawText(QtCore.QRect(0, y_sec + r + 10, w, 16), QtCore.Qt.AlignCenter,
                     "── 二次侧测量端口 ──")
 
-        # ═══════════════════ 一次侧（下半部）═══════════════════
-
-        # 一次侧端子圆：显示一次侧端子处的实际相别
+        # 一次侧：下方为输入电缆，上方为 A1/B1/C1 端子。
         qp.setFont(f7); qp.setPen(QtGui.QPen(QtGui.QColor('#94a3b8')))
         qp.drawText(QtCore.QRect(0, y_pri - r - 26, w, 16), QtCore.Qt.AlignCenter,
                     f"一次侧结果: {''.join(pri_actual)}")
@@ -251,7 +247,6 @@ class PTWiringWidget(QtWidgets.QWidget):
             qp.setPen(QtGui.QPen(border_c, border_w))
             qp.setBrush(QtGui.QBrush(QtGui.QColor('#ffffff')))
             qp.drawEllipse(x - r, y_pri - r, 2 * r, 2 * r)
-            f7b = QtGui.QFont(); f7b.setPointSize(8); f7b.setBold(True)
             qp.setFont(f7b); qp.setPen(QtGui.QPen(QtGui.QColor('#1e293b')))
             qp.drawText(QtCore.QRect(x - r, y_pri - r, 2 * r, 2 * r),
                         QtCore.Qt.AlignCenter, pri_lbl[i])
@@ -260,7 +255,6 @@ class PTWiringWidget(QtWidgets.QWidget):
             qp.drawText(QtCore.QRect(x + r + 6, y_pri - 9, 36, 18),
                         QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, f"({ph_in})")
 
-        # 一次侧交叉连线：从下方来相实际位置连到一次侧端子
         for i, ph_in in enumerate(pri_actual):
             src_x = xs[pri_input.index(ph_in)]
             dst_x = xs[i]
@@ -270,7 +264,6 @@ class PTWiringWidget(QtWidgets.QWidget):
             qp.setPen(pen)
             qp.drawLine(src_x, y_cable - r - 1, dst_x, y_pri + r + 1)
 
-        # 输入电缆圆：继承上游实际来相顺序
         for i, ph in enumerate(pri_input):
             x = xs[i]; c = QtGui.QColor(_PC[ph])
             qp.setPen(QtGui.QPen(c.darker(120), 2))
@@ -287,6 +280,4 @@ class PTWiringWidget(QtWidgets.QWidget):
         qp.drawText(QtCore.QRect(0, y_cable + r + 8, w, 16), QtCore.Qt.AlignCenter,
                     f"实际来相: {''.join(pri_input)}")
         qp.end()
-
-
 __all__ = ["PTWiringWidget"]

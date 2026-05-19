@@ -21,21 +21,21 @@ class RenderState:
     brk1_text: str = ""
     brk1_bg: str = "gray"
     brk1_visual: bool = False
-    color_sw1: str = "gray"
+    # color_sw1: str = "gray"  # overcurrent heat-color switch UI disabled
     brk2_text: str = ""
     brk2_bg: str = "gray"
     brk2_visual: bool = False
-    color_sw2: str = "gray"
+    # color_sw2: str = "gray"  # overcurrent heat-color switch UI disabled
     # relay
     relay_msg: str = ""
     relay_color: str = "gray"
-    # CT readings
-    i1_rms: float = 0.0
-    ip1: float = 0.0
-    iq1: float = 0.0
-    i2_rms: float = 0.0
-    ip2: float = 0.0
-    iq2: float = 0.0
+    # CT numeric readouts are disabled in the topology UI.
+    # i1_rms: float = 0.0
+    # ip1: float = 0.0
+    # iq1: float = 0.0
+    # i2_rms: float = 0.0
+    # ip2: float = 0.0
+    # iq2: float = 0.0
     circ_msg: str = ""
     circ_color: str = "gray"
     # grounding / PT

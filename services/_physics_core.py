@@ -104,7 +104,7 @@ class WaveformMixin:
         speed_factor = self._control_speed_factor(sim)
         for generator in (sim.gen1, sim.gen2):
             target_amp = generator.amp if generator.running else 0.0
-            climb_speed = 185.0 * sim.gov_gain * speed_factor
+            climb_speed = 185.0 * speed_factor
             if generator.actual_amp < target_amp:
                 generator.actual_amp = min(target_amp, generator.actual_amp + climb_speed)
             elif generator.actual_amp > target_amp:

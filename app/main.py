@@ -360,7 +360,7 @@ class PowerSyncController:
 
     def toggle_pause(self) -> None:
         self.sim_state.paused = not self.sim_state.paused
-        self.ui.pause_btn.setText("恢复物理时空" if self.sim_state.paused else "暂停整个物理空间")
+        self.ui.pause_btn.setText("恢复波形动画时间" if self.sim_state.paused else "暂停波形动画时间")
         self.ui._apply_button_tone(
             self.ui.pause_btn,
             "success" if self.sim_state.paused else "warning",

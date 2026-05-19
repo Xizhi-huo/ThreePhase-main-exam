@@ -18,6 +18,9 @@ from ui.widgets.control_panel._widget_tokens import (
 class TriangleSpinBox(QtWidgets.QSpinBox):
     """QSpinBox with explicitly painted up/down triangles for themed UIs."""
 
+    def wheelEvent(self, event) -> None:
+        event.ignore()
+
     def paintEvent(self, event) -> None:
         super().paintEvent(event)
         option = QtWidgets.QStyleOptionSpinBox()

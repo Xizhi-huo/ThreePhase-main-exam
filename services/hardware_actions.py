@@ -41,7 +41,7 @@ class HardwareActions:
         if gen.breaker_closed or gen.cmd_close:
             self._show_warning(
                 "位置闭锁",
-                "手车位置未改变。",
+                "断路器位置未改变。",
             )
             return False
         gen.breaker_position = position

@@ -6,8 +6,6 @@ from ui.widgets.control_panel._widget_tokens import (
     apply_badge_tone,
     apply_button_tone,
     apply_toggle_tone,
-    make_slider,
-    slider_row,
 )
 
 
@@ -43,16 +41,6 @@ class ParamControlsPage(QtWidgets.QWidget):
         speed_layout.addWidget(self.sim_speed_slider)
         layout.addWidget(speed_group)
 
-        param_group = QtWidgets.QGroupBox("🎛️ PCC核心参数整定 (Parameter Setup)")
-        param_layout = QtWidgets.QFormLayout(param_group)
-
-        self.gov_gain_slider = make_slider(10, 200, int(self.sim_state.gov_gain * 100))
-        self.gov_gain_label = QtWidgets.QLabel(f"{self.sim_state.gov_gain:.2f}")
-        self.gov_gain_slider.valueChanged.connect(self._on_gov_gain_changed)
-        param_layout.addRow("调速增益(Gov):", slider_row(self.gov_gain_slider, self.gov_gain_label))
-
-        layout.addWidget(param_group)
-
         self.rotate_phasor_cb = QtWidgets.QCheckBox("相量图：绝对参考系 (电网旋转)")
         self.rotate_phasor_cb.setChecked(self.sim_state.rotate_phasor)
         apply_toggle_tone(self.rotate_phasor_cb, "primary")
@@ -67,7 +55,7 @@ class ParamControlsPage(QtWidgets.QWidget):
         layout.addWidget(self.relay_lbl)
 
 
-        self.pause_btn = QtWidgets.QPushButton("⏸ 暂停整个物理空间")
+        self.pause_btn = QtWidgets.QPushButton("⏸ 暂停波形动画")
         apply_button_tone(self.pause_btn, "warning", hero=True)
         self.pause_btn.clicked.connect(self.on_toggle_pause_cb)
         layout.addWidget(self.pause_btn)
@@ -78,8 +66,3 @@ class ParamControlsPage(QtWidgets.QWidget):
         speed = value / 100.0
         self.sim_state.sim_speed = speed
         self.sim_speed_label.setText(f"速度: {speed:.2f}×")
-
-    def _on_gov_gain_changed(self, value):
-        result = value / 100.0
-        self.sim_state.gov_gain = result
-        self.gov_gain_label.setText(f"{result:.2f}")

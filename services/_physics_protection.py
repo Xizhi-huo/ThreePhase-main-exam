@@ -56,17 +56,19 @@ class ProtectionMixin:
             # g1a_sample/ga_sample 已是峰值相电压，直接相减得环流峰值
             self.i1_rms = abs((wave_state['g1a_sample'] - wave_state['ga_sample']) / XS)
             # a1/a2 为线电压 RMS，乘以 _PEAK 转为峰值相电压后计算功率电流
-            self.ip1 = _PEAK * (a1 * np.sin(delta1)) / XS
-            self.iq1 = _PEAK * (a1 * np.cos(delta1) - wave_state['bus_a']) / XS
+            # self.ip1 = _PEAK * (a1 * np.sin(delta1)) / XS
+            # self.iq1 = _PEAK * (a1 * np.cos(delta1) - wave_state['bus_a']) / XS
         else:
-            self.i1_rms = self.ip1 = self.iq1 = 0.0
+            self.i1_rms = 0.0
+            # self.ip1 = self.iq1 = 0.0
 
         if g2_connected:
             self.i2_rms = abs((wave_state['g2a_sample'] - wave_state['ga_sample']) / XS)
-            self.ip2 = _PEAK * (a2 * np.sin(delta2)) / XS
-            self.iq2 = _PEAK * (a2 * np.cos(delta2) - wave_state['bus_a']) / XS
+            # self.ip2 = _PEAK * (a2 * np.sin(delta2)) / XS
+            # self.iq2 = _PEAK * (a2 * np.cos(delta2) - wave_state['bus_a']) / XS
         else:
-            self.i2_rms = self.ip2 = self.iq2 = 0.0
+            self.i2_rms = 0.0
+            # self.ip2 = self.iq2 = 0.0
 
         self.relay_msg, self.relay_color = (
             f"🛡️ 继电保护监控中 (跳闸阈值: 一次侧 {TRIP_CURRENT}A / CT二次侧 {TRIP_CURRENT/CT_RATIO:.1f}A)",
@@ -219,7 +221,7 @@ class ProtectionMixin:
             setattr(self, visual_attr, False)
 
     def _update_breaker_logic(self, sim, delta1, delta2, a1, a2, ref_freq, ref_amp, is_isolated) -> None:
-        self.color_sw1 = _heat_color(self.i1_rms)
-        self.color_sw2 = _heat_color(self.i2_rms)
+        # self.color_sw1 = _heat_color(self.i1_rms)  # overcurrent heat-color switch UI disabled
+        # self.color_sw2 = _heat_color(self.i2_rms)  # overcurrent heat-color switch UI disabled
         self._update_breaker_state(sim.gen1, 1, a1, delta1, ref_freq, ref_amp, is_isolated)
         self._update_breaker_state(sim.gen2, 2, a2, delta2, ref_freq, ref_amp, is_isolated)

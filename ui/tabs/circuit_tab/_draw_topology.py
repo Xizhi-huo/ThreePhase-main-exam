@@ -3,7 +3,7 @@ from __future__ import annotations
 import matplotlib.patheffects as pe
 import numpy as np
 
-from domain.constants import CT_RATIO
+# from domain.constants import CT_RATIO  # CT/Ip/Iq numeric topology UI disabled
 from domain.node_map import NODES
 from matplotlib.patches import Circle, FancyBboxPatch
 from ui.tabs._step_style import normalize_qt_color
@@ -277,12 +277,12 @@ class DrawTopologyMixin:
         self.txt_pt2_v = ax.text(pt2_cx + pt_size * 2.8, pt2_cy - 0.035, "PT2: -- V", fontsize=7, ha="left", va="center", color="#0066cc", bbox=bbox_pt)
         self.txt_pt3_v = ax.text(pt3_cx, pt_v_lbl_y - 0.03, "PT3: -- V", fontsize=7, ha="center", color="#0066cc", bbox=bbox_pt)
 
-        self.txt_i1 = ax.text(ct_x_left, ct_y_top, "Gen1  CT: 0.00 A", color="#cc2200", ha="right", weight="bold", fontsize=8, clip_on=False)
-        self.txt_ip1 = ax.text(ct_x_left, ct_y_top - ct_dy, "Ip = 0.00 A  (有功)", color="#0055aa", ha="right", fontsize=7, clip_on=False)
-        self.txt_iq1 = ax.text(ct_x_left, ct_y_top - 2 * ct_dy, "Iq = 0.00 A  (无功)", color="#aa00aa", ha="right", fontsize=7, clip_on=False)
+        # self.txt_i1 = ax.text(ct_x_left, ct_y_top, "Gen1  CT: 0.00 A", color="#cc2200", ha="right", weight="bold", fontsize=8, clip_on=False)
+        # self.txt_ip1 = ax.text(ct_x_left, ct_y_top - ct_dy, "Ip = 0.00 A  (有功)", color="#0055aa", ha="right", fontsize=7, clip_on=False)
+        # self.txt_iq1 = ax.text(ct_x_left, ct_y_top - 2 * ct_dy, "Iq = 0.00 A  (无功)", color="#aa00aa", ha="right", fontsize=7, clip_on=False)
         self.txt_grounding = ax.text(
             0.50,
-            1.01,
+            0.99,
             "N线: 未接地",
             color="gray",
             ha="center",
@@ -290,12 +290,12 @@ class DrawTopologyMixin:
             clip_on=False,
             bbox=dict(facecolor="#f5f5f5", edgecolor="gray", boxstyle="round,pad=0.3", alpha=0.9),
         )
-        self.txt_i2 = ax.text(ct_x_right, ct_y_top, "Gen2  CT: 0.00 A", color="#cc2200", ha="left", weight="bold", fontsize=8, clip_on=False)
-        self.txt_ip2 = ax.text(ct_x_right, ct_y_top - ct_dy, "Ip = 0.00 A  (有功)", color="#0055aa", ha="left", fontsize=7, clip_on=False)
-        self.txt_iq2 = ax.text(ct_x_right, ct_y_top - 2 * ct_dy, "Iq = 0.00 A  (无功)", color="#aa00aa", ha="left", fontsize=7, clip_on=False)
+        # self.txt_i2 = ax.text(ct_x_right, ct_y_top, "Gen2  CT: 0.00 A", color="#cc2200", ha="left", weight="bold", fontsize=8, clip_on=False)
+        # self.txt_ip2 = ax.text(ct_x_right, ct_y_top - ct_dy, "Ip = 0.00 A  (有功)", color="#0055aa", ha="left", fontsize=7, clip_on=False)
+        # self.txt_iq2 = ax.text(ct_x_right, ct_y_top - 2 * ct_dy, "Iq = 0.00 A  (无功)", color="#aa00aa", ha="left", fontsize=7, clip_on=False)
         self.txt_circ_flow = ax.text(
             0.50,
-            -0.045,
+            -0.07,
             "机组间无环流",
             color="gray",
             ha="center",
@@ -350,12 +350,12 @@ class DrawTopologyMixin:
         return self._sidebar_badges[name]
 
     def _render_ct_readings(self, p):
-        self.txt_i1.set_text(f"Gen1  CT: {p.i1_rms / CT_RATIO:.2f} A")
-        self.txt_ip1.set_text(f"  Ip = {p.ip1 / CT_RATIO:.2f} A  (有功)")
-        self.txt_iq1.set_text(f"  Iq = {p.iq1 / CT_RATIO:.2f} A  (无功)")
-        self.txt_i2.set_text(f"Gen2  CT: {p.i2_rms / CT_RATIO:.2f} A")
-        self.txt_ip2.set_text(f"  Ip = {p.ip2 / CT_RATIO:.2f} A  (有功)")
-        self.txt_iq2.set_text(f"  Iq = {p.iq2 / CT_RATIO:.2f} A  (无功)")
+        # self.txt_i1.set_text(f"Gen1  CT: {p.i1_rms / CT_RATIO:.2f} A")
+        # self.txt_ip1.set_text(f"  Ip = {p.ip1 / CT_RATIO:.2f} A  (有功)")
+        # self.txt_iq1.set_text(f"  Iq = {p.iq1 / CT_RATIO:.2f} A  (无功)")
+        # self.txt_i2.set_text(f"Gen2  CT: {p.i2_rms / CT_RATIO:.2f} A")
+        # self.txt_ip2.set_text(f"  Ip = {p.ip2 / CT_RATIO:.2f} A  (有功)")
+        # self.txt_iq2.set_text(f"  Iq = {p.iq2 / CT_RATIO:.2f} A  (无功)")
         self.txt_circ_flow.set_text(p.circ_msg)
         self.txt_circ_flow.set_color(p.circ_color)
         self.txt_circ_flow.get_bbox_patch().set_edgecolor(p.circ_color)
@@ -406,9 +406,10 @@ class DrawTopologyMixin:
             (self.sw1_pack, [0.24, 0.28, 0.32], 0.13, 0.20, p.brk1_visual),
             (self.sw2_pack, [0.68, 0.72, 0.76], 0.13, 0.20, p.brk2_visual),
         ]:
-            color1 = p.color_sw1 if lines is self.sw1_pack else p.color_sw2
+            # color1 = p.color_sw1 if lines is self.sw1_pack else p.color_sw2
             for line, x in zip(lines, xs):
-                line.set_color(color1)
+                # line.set_color(color1)  # overcurrent heat-color switch UI disabled
+                line.set_color("k")
                 if is_closed:
                     line.set_data([x, x], [y_bot, y_top])
                 else:

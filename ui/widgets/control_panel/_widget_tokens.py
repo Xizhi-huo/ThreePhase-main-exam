@@ -1,4 +1,4 @@
-from PyQt5 import QtCore, QtWidgets
+from PyQt5 import QtWidgets
 
 
 def refresh_widget_styles(*widgets):
@@ -40,18 +40,3 @@ def apply_toggle_tone(widget, tone="primary"):
     widget.setProperty("tone", tone)
     refresh_widget_styles(widget)
 
-
-def make_slider(vmin, vmax, init) -> QtWidgets.QSlider:
-    slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
-    slider.setRange(vmin, vmax)
-    slider.setValue(init)
-    return slider
-
-
-def slider_row(slider, label) -> QtWidgets.QWidget:
-    widget = QtWidgets.QWidget()
-    layout = QtWidgets.QHBoxLayout(widget)
-    layout.setContentsMargins(0, 0, 0, 0)
-    layout.addWidget(slider, 1)
-    layout.addWidget(label)
-    return widget
