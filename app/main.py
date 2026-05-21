@@ -6,7 +6,6 @@ import random
 import sys
 import time
 import traceback
-from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -520,39 +519,20 @@ class PowerSyncController:
             self._handle_tick_failure("render")
 
 
-def _access_root() -> Path:
-    # 打包成 exe 后哈希文件在 exe 同级目录；源码运行时在项目根目录。
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parent
-    return Path(__file__).resolve().parents[1]
-
-
-def _load_access_password_hash() -> str | None:
-    try:
-        content = (_access_root() / "access_password.hash").read_text(encoding="utf-8")
-    except OSError:
-        return None
-    for line in content.splitlines():
-        line = line.strip()
-        if line and not line.startswith("#"):
-            return line.lower()
-    return None
+# 访问密码的 SHA-256 哈希，编译进程序，发布后无外部文件可被覆盖。
+# 修改密码：用任意 SHA-256 工具算出新密码的哈希，替换下面这行常量后重新打包。
+# 当前密码：Cummins@AE
+_ACCESS_PASSWORD_HASH = "706c8a1ceadf2e9b824c9c5d4b883e8ea2726e73f45155976542de29d804289a"
 
 
 def _check_access_password() -> bool:
-    expected = _load_access_password_hash()
-    if not expected:
-        QtWidgets.QMessageBox.critical(
-            None, "无法启动", "访问密码文件缺失或损坏，请联系管理员。"
-        )
-        return False
     for remaining in (2, 1, 0):
         text, ok = QtWidgets.QInputDialog.getText(
             None, "访问验证", "请输入访问密码：", QtWidgets.QLineEdit.Password
         )
         if not ok:
             return False
-        if hashlib.sha256(text.encode("utf-8")).hexdigest() == expected:
+        if hashlib.sha256(text.encode("utf-8")).hexdigest() == _ACCESS_PASSWORD_HASH:
             return True
         if remaining:
             QtWidgets.QMessageBox.warning(
