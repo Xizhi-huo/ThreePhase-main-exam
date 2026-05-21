@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import random
 import sys
 import time
 import traceback
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -518,6 +520,48 @@ class PowerSyncController:
             self._handle_tick_failure("render")
 
 
+def _access_root() -> Path:
+    # 打包成 exe 后哈希文件在 exe 同级目录；源码运行时在项目根目录。
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parents[1]
+
+
+def _load_access_password_hash() -> str | None:
+    try:
+        content = (_access_root() / "access_password.hash").read_text(encoding="utf-8")
+    except OSError:
+        return None
+    for line in content.splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            return line.lower()
+    return None
+
+
+def _check_access_password() -> bool:
+    expected = _load_access_password_hash()
+    if not expected:
+        QtWidgets.QMessageBox.critical(
+            None, "无法启动", "访问密码文件缺失或损坏，请联系管理员。"
+        )
+        return False
+    for remaining in (2, 1, 0):
+        text, ok = QtWidgets.QInputDialog.getText(
+            None, "访问验证", "请输入访问密码：", QtWidgets.QLineEdit.Password
+        )
+        if not ok:
+            return False
+        if hashlib.sha256(text.encode("utf-8")).hexdigest() == expected:
+            return True
+        if remaining:
+            QtWidgets.QMessageBox.warning(
+                None, "密码错误", f"密码错误，还可重试 {remaining} 次。"
+            )
+    QtWidgets.QMessageBox.critical(None, "验证失败", "密码错误次数过多，程序退出。")
+    return False
+
+
 if __name__ == "__main__":
     try:
         from ctypes import windll
@@ -527,6 +571,9 @@ if __name__ == "__main__":
 
     app = QtWidgets.QApplication(sys.argv)
     app.setStyle("Fusion")
+
+    if not _check_access_password():
+        sys.exit(0)
 
     ctrl = PowerSyncController()
     ctrl.ui.showMaximized()
