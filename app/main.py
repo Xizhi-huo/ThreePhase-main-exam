@@ -11,9 +11,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from PyQt5 import QtCore, QtWidgets
 
-from ui.text_translation import TEXT_TRANSLATION, install_text_translation
+#from ui.text_translation import TEXT_TRANSLATION, install_text_translation
 
-install_text_translation()
+#install_text_translation()
 
 from domain.constants import DEFAULT_PT_RATIO_ROWS, GRID_AMP
 from domain.enums import BreakerPosition
